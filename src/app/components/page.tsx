@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { LotusMark } from "@/components/ui/lotus-mark";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { notFound } from "next/navigation";
 import { getCurrentSession } from "@/lib/auth/session";
+import { getServerEnvironment } from "@/lib/env/server";
 
 export const metadata: Metadata = {
   title: "Components",
@@ -45,6 +47,12 @@ function PreviewSection({
 }
 
 export default async function ComponentsPage() {
+  // A design workshop is a development tool. Serving it in production adds
+  // unauthenticated surface and advertises the stack for no product benefit.
+  if (getServerEnvironment().NODE_ENV === "production") {
+    notFound();
+  }
+
   const session = await getCurrentSession();
 
   return (

@@ -8,6 +8,11 @@ import { getDevelopmentSession } from "@/lib/auth/development-session";
 import { getAuthSecret, getServerEnvironment } from "@/lib/env/server";
 import { NotFoundError } from "@/lib/http/errors";
 import { problemResponse } from "@/lib/http/problem";
+import {
+  assertWithinRateLimit,
+  rateLimitKey,
+  rateLimitSubject,
+} from "@/lib/http/rate-limit";
 import { assertSameOrigin } from "@/lib/http/request";
 import {
   getRequestId,
@@ -34,6 +39,16 @@ export async function POST(request: Request): Promise<Response> {
     try {
       const requestOrigin = assertSameOrigin(request);
       requireDevelopmentAuth(request);
+      // This handler lives under /api/auth/ but is not part of the Better Auth
+      // handler, so Better Auth's rate limiting does not reach it.
+      await assertWithinRateLimit({
+        key: rateLimitKey(
+          "development-session",
+          rateLimitSubject({ request }),
+        ),
+        limit: 20,
+        windowSeconds: 60,
+      });
       await getDevelopmentSession();
 
       const response = NextResponse.redirect(

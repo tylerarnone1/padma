@@ -11,6 +11,8 @@ import {
   getServerEnvironment,
   getTrustedOrigins,
 } from "@/lib/env/server";
+import { recordMfaLifecycleResult } from "@/lib/auth/mfa-audit";
+import { guardMfaRequest } from "@/lib/auth/mfa-guard";
 import { recordMfaVerificationResult } from "@/lib/auth/recent-mfa-verification";
 import { logger } from "@/lib/logging/logger";
 
@@ -87,12 +89,40 @@ export const auth = betterAuth({
     },
   },
   hooks: {
+    // Padma delegates all of `/api/auth/*` to Better Auth, so these hooks are
+    // the only seam every caller of those endpoints must pass through.
+    before: createAuthMiddleware(async (context) => {
+      await guardMfaRequest({
+        path: context.path,
+        resolveSession: () =>
+          auth.api.getSession({
+            headers: context.headers ?? new Headers(),
+          }),
+        ...(context.headers ? { headers: context.headers } : {}),
+      });
+    }),
     after: createAuthMiddleware(async (context) => {
+      const resolveActorId = async (): Promise<string | null> => {
+        if (!context.headers) return null;
+        const session = await auth.api.getSession({
+          headers: context.headers,
+        });
+        return session?.user.id ?? null;
+      };
+
       await recordMfaVerificationResult({
         path: context.path,
         returned: context.context.returned,
         newSession: context.context.newSession,
         session: context.context.session,
+        resolveActorId,
+        ...(context.headers ? { headers: context.headers } : {}),
+      });
+
+      await recordMfaLifecycleResult({
+        path: context.path,
+        returned: context.context.returned,
+        resolveActorId,
         ...(context.headers ? { headers: context.headers } : {}),
       });
     }),

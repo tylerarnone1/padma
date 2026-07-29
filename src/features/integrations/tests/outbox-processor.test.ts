@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   deliveryUpdateMany: vi.fn(),
   deliveryUpdate: vi.fn(),
   assertSafeWebhookUrl: vi.fn(),
-  fetch: vi.fn(),
+  postSignedWebhook: vi.fn(),
 }));
 
 vi.mock("@/lib/db/client", () => ({
@@ -38,7 +38,12 @@ vi.mock("@/lib/crypto/encryption", () => ({
 
 vi.mock("@/features/integrations/security/webhook-security", () => ({
   assertSafeWebhookUrl: mocks.assertSafeWebhookUrl,
+  isLocalDevelopmentWebhookUrl: vi.fn(() => false),
   signWebhook: vi.fn(() => "signature"),
+}));
+
+vi.mock("@/features/integrations/security/webhook-transport", () => ({
+  postSignedWebhook: mocks.postSignedWebhook,
 }));
 
 vi.mock("@/lib/logging/logger", () => ({
@@ -58,6 +63,7 @@ const outboxEvent = {
   topic: "record.created",
   aggregateType: "record",
   aggregateId: "record-1",
+  ownerId: "user-1",
   payload: { name: "Example" },
   status: "PROCESSING",
   attemptCount: 1,
@@ -69,7 +75,6 @@ const outboxEvent = {
 describe("outbox processor leases", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal("fetch", mocks.fetch);
     mocks.outboxUpdateMany.mockResolvedValue({ count: 1 });
     mocks.outboxUpdate.mockResolvedValue({});
     mocks.endpointFindMany.mockResolvedValue([]);
@@ -125,7 +130,7 @@ describe("outbox processor leases", () => {
         outboxEvent,
       },
     ]);
-    mocks.fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    mocks.postSignedWebhook.mockResolvedValue({ status: 204 });
 
     await expect(processWebhookDeliveryBatch()).resolves.toBe(1);
 
@@ -143,7 +148,9 @@ describe("outbox processor leases", () => {
     });
     expect(
       mocks.deliveryUpdateMany.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.fetch.mock.invocationCallOrder[0] ?? Infinity);
+    ).toBeLessThan(
+      mocks.postSignedWebhook.mock.invocationCallOrder[0] ?? Infinity,
+    );
     expect(mocks.deliveryUpdate).toHaveBeenCalledWith({
       where: { id: "delivery-1" },
       data: expect.objectContaining({

@@ -32,12 +32,17 @@ for (const [network, prefix] of [
   ["::", 128],
   ["::1", 128],
   ["::ffff:0:0", 96],
+  // RFC 6052 well-known NAT64 prefix. Without this, an IPv4-embedded address
+  // reaches an internal IPv4 host through a NAT64 gateway.
+  ["64:ff9b::", 96],
   ["64:ff9b:1::", 48],
   ["100::", 64],
   ["2001::", 23],
+  ["2001:20::", 28],
   ["2001:db8::", 32],
   ["2002::", 16],
   ["3fff::", 20],
+  ["5f00::", 16],
   ["fc00::", 7],
   ["fe80::", 10],
   ["ff00::", 8],
@@ -58,8 +63,28 @@ function hostnameWithoutBrackets(hostname: string): string {
     : hostname;
 }
 
+const loopbackHostnames = ["localhost", "127.0.0.1", "::1"];
+
+/**
+ * True for a loopback destination outside production, which local development
+ * needs in order to receive its own webhooks.
+ */
+export function isLocalDevelopmentWebhookUrl(url: URL): boolean {
+  return (
+    getServerEnvironment().NODE_ENV !== "production" &&
+    loopbackHostnames.includes(hostnameWithoutBrackets(url.hostname))
+  );
+}
+
+/**
+ * Admission check for a webhook destination.
+ *
+ * This rejects a destination that resolves to a private address *now*. It is
+ * not sufficient on its own: DNS can change between this check and the
+ * connection, so the authoritative validation happens in the connection's own
+ * resolver — see `postSignedWebhook` in webhook-transport.ts.
+ */
 export async function assertSafeWebhookUrl(value: string): Promise<URL> {
-  const environment = getServerEnvironment();
   const url = new URL(value);
   const hostname = hostnameWithoutBrackets(url.hostname);
 
@@ -68,18 +93,13 @@ export async function assertSafeWebhookUrl(value: string): Promise<URL> {
   }
   if (url.protocol !== "https:") {
     const isLocalDevelopment =
-      environment.NODE_ENV !== "production" &&
-      url.protocol === "http:" &&
-      ["localhost", "127.0.0.1", "::1"].includes(hostname);
+      url.protocol === "http:" && isLocalDevelopmentWebhookUrl(url);
     if (!isLocalDevelopment) {
       throw new Error("Webhook URLs must use HTTPS.");
     }
   }
 
-  if (
-    environment.NODE_ENV !== "production" &&
-    ["localhost", "127.0.0.1", "::1"].includes(hostname)
-  ) {
+  if (isLocalDevelopmentWebhookUrl(url)) {
     return url;
   }
 

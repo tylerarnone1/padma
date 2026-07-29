@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AuthenticationRequiredError,
   ForbiddenError,
+  RateLimitedError,
 } from "@/lib/http/errors";
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   assertRecentMfa: vi.fn(),
   requirePermission: vi.fn(),
   createWebhookEndpoint: vi.fn(),
+  listWebhookEndpoints: vi.fn(),
   recordSecurityAudit: vi.fn(),
+  assertWithinRateLimit: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -24,7 +27,16 @@ vi.mock("@/features/access-control/data/authorization", () => ({
 
 vi.mock("@/features/integrations/services/webhook-service", () => ({
   createWebhookEndpoint: mocks.createWebhookEndpoint,
+  listWebhookEndpoints: mocks.listWebhookEndpoints,
 }));
+
+vi.mock("@/lib/http/rate-limit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/http/rate-limit")>();
+  return {
+    ...actual,
+    assertWithinRateLimit: mocks.assertWithinRateLimit,
+  };
+});
 
 vi.mock("@/lib/audit/security-audit", async (importOriginal) => {
   const actual =
@@ -42,7 +54,7 @@ vi.mock("@/lib/logging/logger", () => ({
   },
 }));
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
 
 const session = {
   user: {
@@ -83,7 +95,9 @@ describe("webhook route security boundary", () => {
       },
       signingSecret: "whsec_once",
     });
+    mocks.listWebhookEndpoints.mockResolvedValue([]);
     mocks.recordSecurityAudit.mockResolvedValue(undefined);
+    mocks.assertWithinRateLimit.mockResolvedValue(undefined);
   });
 
   it("durably audits an MFA denial for the authenticated actor", async () => {
@@ -122,7 +136,11 @@ describe("webhook route security boundary", () => {
   });
 
   it("does not duplicate the permission policy's denial audit", async () => {
-    mocks.requirePermission.mockRejectedValue(new ForbiddenError());
+    // The real requirePermission audits its own denial and marks the error as
+    // already audited.
+    mocks.requirePermission.mockRejectedValue(
+      new ForbiddenError(undefined, true),
+    );
 
     const response = await POST(webhookRequest());
 
@@ -164,5 +182,59 @@ describe("webhook route security boundary", () => {
     expect(mocks.requirePermission.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.createWebhookEndpoint.mock.invocationCallOrder[0] ?? Infinity,
     );
+  });
+
+  it("rate limits creation before performing the mutation", async () => {
+    mocks.assertWithinRateLimit.mockRejectedValue(
+      new RateLimitedError(30),
+    );
+
+    const response = await POST(webhookRequest());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("30");
+    expect(mocks.createWebhookEndpoint).not.toHaveBeenCalled();
+  });
+
+  it("scopes the listing to the authenticated owner", async () => {
+    mocks.listWebhookEndpoints.mockResolvedValue([
+      { id: "endpoint-1", url: "https://hooks.example/events" },
+    ]);
+
+    const response = await GET(
+      new Request("https://app.example/api/webhooks", { method: "GET" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.listWebhookEndpoints).toHaveBeenCalledWith({
+      actorId: "user-1",
+    });
+    expect(mocks.requirePermission).toHaveBeenCalledWith({
+      userId: "user-1",
+      permission: "integration:read",
+    });
+  });
+
+  it("never returns a signing secret when listing", async () => {
+    mocks.listWebhookEndpoints.mockResolvedValue([
+      { id: "endpoint-1", url: "https://hooks.example/events" },
+    ]);
+
+    const response = await GET(
+      new Request("https://app.example/api/webhooks", { method: "GET" }),
+    );
+
+    expect(await response.text()).not.toContain("whsec_");
+  });
+
+  it("denies an unauthenticated listing", async () => {
+    mocks.requireSession.mockRejectedValue(new AuthenticationRequiredError());
+
+    const response = await GET(
+      new Request("https://app.example/api/webhooks", { method: "GET" }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.listWebhookEndpoints).not.toHaveBeenCalled();
   });
 });

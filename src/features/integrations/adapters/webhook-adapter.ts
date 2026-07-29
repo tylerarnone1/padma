@@ -19,9 +19,17 @@ export class WebhookAdapter implements IntegrationAdapter {
   readonly key = "webhook";
 
   async dispatch(event: IntegrationEvent): Promise<DispatchResult> {
+    // An event with no owner has no audience. Selecting every active endpoint
+    // here would let anyone who can register a webhook receive every event in
+    // the application, including other users' payloads.
+    if (event.ownerId === null) {
+      return { accepted: 0 };
+    }
+
     const endpoints = await database.webhookEndpoint.findMany({
       where: {
         isActive: true,
+        ownerId: event.ownerId,
       },
       select: {
         id: true,

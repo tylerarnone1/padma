@@ -6,6 +6,7 @@ const event = {
   topic: "record.created",
   aggregateType: "record",
   aggregateId: "record-1",
+  ownerId: "user-1",
   payload: { name: "Example" },
   occurredAt: new Date("2026-01-01T00:00:00.000Z"),
 };

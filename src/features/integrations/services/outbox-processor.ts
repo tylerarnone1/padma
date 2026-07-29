@@ -5,8 +5,10 @@ import type { IntegrationAdapter } from "@/features/integrations/contracts/integ
 import { parseDatabaseIntegrationEvent } from "@/features/integrations/schemas/integration-event-schema";
 import {
   assertSafeWebhookUrl,
+  isLocalDevelopmentWebhookUrl,
   signWebhook,
 } from "@/features/integrations/security/webhook-security";
+import { postSignedWebhook } from "@/features/integrations/security/webhook-transport";
 import { decryptSecret } from "@/lib/crypto/encryption";
 import { database } from "@/lib/db/client";
 import { logger } from "@/lib/logging/logger";
@@ -61,6 +63,7 @@ export async function processOutboxBatch(limit = 25): Promise<number> {
               topic: event.topic,
               aggregateType: event.aggregateType,
               aggregateId: event.aggregateId,
+              ownerId: event.ownerId,
               payload: event.payload,
               occurredAt: event.createdAt,
             }),
@@ -79,6 +82,7 @@ export async function processOutboxBatch(limit = 25): Promise<number> {
       processed += 1;
     } catch (error) {
       const attempt = event.attemptCount + 1;
+      const exhausted = attempt >= MAXIMUM_ATTEMPTS;
       await database.outboxEvent.update({
         where: { id: event.id },
         data: {
@@ -90,7 +94,16 @@ export async function processOutboxBatch(limit = 25): Promise<number> {
           ),
         },
       });
-      logger.error({ error, eventId: event.id }, "Outbox dispatch failed");
+      // An exhausted event stops matching the candidate filter, so without an
+      // explicit signal it would go silently dead.
+      if (exhausted) {
+        logger.error(
+          { error, eventId: event.id, topic: event.topic, attempt },
+          "Outbox event exhausted its retries and will not be retried again",
+        );
+      } else {
+        logger.error({ error, eventId: event.id }, "Outbox dispatch failed");
+      }
     }
   }
 
@@ -149,10 +162,9 @@ export async function processWebhookDeliveryBatch(limit = 25): Promise<number> {
     const timestamp = Math.floor(Date.now() / 1000).toString();
 
     try {
-      await assertSafeWebhookUrl(delivery.endpoint.url);
-      const response = await fetch(delivery.endpoint.url, {
-        method: "POST",
-        redirect: "error",
+      const url = await assertSafeWebhookUrl(delivery.endpoint.url);
+      const response = await postSignedWebhook({
+        url,
         headers: {
           "content-type": "application/json",
           "user-agent": "Padma-Webhooks/1.0",
@@ -165,10 +177,10 @@ export async function processWebhookDeliveryBatch(limit = 25): Promise<number> {
           })}`,
         },
         body: payload,
-        signal: AbortSignal.timeout(10_000),
+        allowPrivateAddresses: isLocalDevelopmentWebhookUrl(url),
       });
 
-      if (!response.ok) {
+      if (response.status < 200 || response.status >= 300) {
         throw new Error(`Webhook returned HTTP ${response.status}.`);
       }
 
@@ -201,10 +213,22 @@ export async function processWebhookDeliveryBatch(limit = 25): Promise<number> {
             error instanceof Error ? error.message.slice(0, 500) : "Unknown error",
         },
       });
-      logger.warn(
-        { error, deliveryId: delivery.id, attempt },
-        "Webhook delivery failed",
-      );
+      if (exhausted) {
+        logger.error(
+          {
+            error,
+            deliveryId: delivery.id,
+            endpointId: delivery.endpointId,
+            attempt,
+          },
+          "Webhook delivery exhausted its retries",
+        );
+      } else {
+        logger.warn(
+          { error, deliveryId: delivery.id, attempt },
+          "Webhook delivery failed",
+        );
+      }
     }
   }
 

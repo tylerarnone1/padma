@@ -19,55 +19,74 @@
  */
 
 /**
- * A lotus petal: broad through the middle, tapering to a point, hinged at the
- * base of its 60x112 box. The second path is an inner highlight that keeps the
- * petal reading as a curved surface rather than a flat blade.
+ * A lotus petal: broad and cupped through the lower body, with the recurved
+ * tip found in Indian lotus ornament. It is hinged at the base of its 60x112
+ * box. The second path is a curved vein rather than a concentric inset, which
+ * keeps tightly furled petals from stacking into one dark central almond.
  */
 /*
- * Obovate, not almond. An almond is pointed at both ends and narrow through the
- * body, so a ring of them furls into a spindle. A lotus petal is broad and
- * rounded with a *rounded* base and only a short taper to the tip, and it is
- * that roundness through the middle that makes a furled bud read as spherical.
+ * The tip leans right, folds back, and then swells into the petal's shoulder.
+ * Rotating that small hook around each whorl produces the layered, round bulb
+ * of a furled lotus instead of a ring of flat blades meeting in a seam.
  */
 const PETAL_PATH =
-  "M30 4C43 15 57 35 57 60C57 85 45 105 30 108C15 105 3 85 3 60C3 35 17 15 30 4Z";
+  "M30 108C13 105 3 88 4 64C5 43 16 27 27 17C31 13 33 8 33 3C39 10 40 18 36 27C49 35 57 49 57 66C57 88 45 105 30 108Z";
 const PETAL_INNER_PATH =
-  "M30 22C39 31 48 46 48 63C48 82 40 95 30 98C20 95 12 82 12 63C12 46 21 31 30 22Z";
-
-/* Sepals stay narrow and pointed — they are leaves, not petals. */
-const SEPAL_PATH = "M30 2C40 26 46 62 30 110C14 62 20 26 30 2Z";
-const SEPAL_INNER_PATH = "M30 20C36 38 40 64 30 96C20 64 24 38 30 20Z";
+  "M26 95C19 77 20 55 31 37C38 26 39 16 34 7";
 
 /**
- * Whorls from the outside in, plus the sepal collar that sits behind them all.
+ * Petal whorls from the outside in, plus a smaller supporting whorl behind
+ * them all.
  *
  * Petal counts are kept low and mutually coprime: a real bud's silhouette is
  * drawn by a handful of broad petals overlapping, not by many narrow blades,
  * and coprime counts stop the rings from lining up into spokes as it turns.
  *
- * The sepals stay spread even while the flower is furled, which is what a
- * closed lotus actually looks like, and they read as the star-shaped collar at
- * the base of the bud.
+ * The base whorl uses the same recurved petal as the flower. Scaling and angle,
+ * rather than a separate spear-shaped leaf, distinguish it from the outer row.
  */
 const RINGS = [
-  { name: "sepal", count: 8, leaf: true },
-  { name: "outer", count: 9, leaf: false },
-  { name: "mid", count: 7, leaf: false },
-  { name: "core", count: 5, leaf: false },
+  { name: "base", count: 8 },
+  { name: "outer", count: 9 },
+  { name: "mid", count: 7 },
+  { name: "core", count: 5 },
 ] as const;
 
-function Petal({ focused, leaf }: { focused: boolean; leaf: boolean }) {
+function Petal({
+  focused,
+  gradientId,
+}: {
+  focused: boolean;
+  gradientId: string;
+}) {
   return (
     <svg
       className="padma-petal"
       viewBox="0 0 60 112"
       data-petal-focus={focused ? "" : undefined}
     >
-      <path d={leaf ? SEPAL_PATH : PETAL_PATH} />
+      <defs>
+        <linearGradient
+          id={gradientId}
+          x1="0"
+          y1="0.15"
+          x2="1"
+          y2="0.85"
+        >
+          <stop className="padma-depth-shadow" offset="0" />
+          <stop className="padma-depth-clear" offset="0.2" />
+          <stop className="padma-depth-highlight" offset="0.46" />
+          <stop className="padma-depth-clear" offset="0.7" />
+          <stop className="padma-depth-shadow-soft" offset="1" />
+        </linearGradient>
+      </defs>
+      <path className="padma-petal-body" d={PETAL_PATH} />
       <path
-        className="padma-petal-inner"
-        d={leaf ? SEPAL_INNER_PATH : PETAL_INNER_PATH}
+        className="padma-petal-depth"
+        d={PETAL_PATH}
+        fill={`url(#${gradientId})`}
       />
+      <path className="padma-petal-inner" d={PETAL_INNER_PATH} />
     </svg>
   );
 }
@@ -85,7 +104,7 @@ export function LotusBloom() {
                 // The first outer petal is the one the camera dives into.
                 <Petal
                   key={index}
-                  leaf={ring.leaf}
+                  gradientId={`padma-${ring.name}-depth-${index}`}
                   focused={ring.name === "outer" && index === 0}
                 />
               ))}

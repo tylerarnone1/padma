@@ -14,6 +14,16 @@ const IV_BYTES = 12;
 function getEncryptionKey(): Buffer {
   const environment = getServerEnvironment();
   if (!environment.INTEGRATION_ENCRYPTION_KEY) {
+    // The environment schema already requires this key in production. Repeating
+    // the check here means the fallback cannot become live through a code path
+    // that bypasses environment validation: the key below is published in this
+    // repository and is worthless as a secret.
+    if (environment.NODE_ENV === "production") {
+      throw new Error(
+        "INTEGRATION_ENCRYPTION_KEY is required in production. Refusing to use the published development key.",
+      );
+    }
+
     return createHash("sha256")
       .update("development-only-integration-encryption-key")
       .digest();

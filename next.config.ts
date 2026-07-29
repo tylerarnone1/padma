@@ -22,11 +22,14 @@ const nextConfig: NextConfig = {
             key: "Cross-Origin-Opener-Policy",
             value: "same-origin-allow-popups",
           },
+          { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
           ...(process.env.NODE_ENV === "production"
             ? [
                 {
+                  // Subdomains are included because a session cookie scoped to
+                  // the parent domain is reachable from any of them.
                   key: "Strict-Transport-Security",
-                  value: "max-age=31536000",
+                  value: "max-age=31536000; includeSubDomains",
                 },
               ]
             : []),

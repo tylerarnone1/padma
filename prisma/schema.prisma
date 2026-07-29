@@ -29,19 +29,21 @@ enum WebhookDeliveryStatus {
 }
 
 model User {
-  id               String       @id @default(uuid())
-  name             String
-  email            String       @unique
-  emailVerified    Boolean      @default(false)
-  image            String?
-  twoFactorEnabled Boolean      @default(false)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  sessions         Session[]
-  accounts         Account[]
-  twoFactor        TwoFactor?
-  roles            UserRole[]
-  auditEvents      AuditEvent[] @relation("AuditActor")
+  id                     String                  @id @default(uuid())
+  name                   String
+  email                  String                  @unique
+  emailVerified          Boolean                 @default(false)
+  image                  String?
+  twoFactorEnabled       Boolean                 @default(false)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  sessions               Session[]
+  accounts               Account[]
+  twoFactor              TwoFactor?
+  roles                  UserRole[]
+  auditEvents            AuditEvent[]            @relation("AuditActor")
+  webhookEndpoints       WebhookEndpoint[]
+  integrationConnections IntegrationConnection[]
 
   @@map("users")
 }
@@ -187,6 +189,10 @@ model OutboxEvent {
   topic             String
   aggregateType     String
   aggregateId       String
+  /// Who this event is about, and therefore who may receive it. Emitters must
+  /// state this explicitly. `null` means the event has no user-facing audience
+  /// and is delivered to no endpoint; it does not mean "everyone".
+  ownerId           String?
   payload           Json
   idempotencyKey    String            @unique
   status            OutboxStatus      @default(PENDING)
@@ -200,11 +206,16 @@ model OutboxEvent {
 
   @@index([status, availableAt])
   @@index([topic, createdAt])
+  @@index([ownerId, createdAt])
   @@map("outbox_events")
 }
 
+/// A webhook endpoint is owned by the user who registered it. Delivery is
+/// scoped to that owner, so registering an endpoint never grants visibility of
+/// another owner's events.
 model WebhookEndpoint {
   id              String            @id @default(uuid())
+  ownerId         String
   url             String
   description     String?
   secretEncrypted String
@@ -212,8 +223,10 @@ model WebhookEndpoint {
   isActive        Boolean           @default(true)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  owner           User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   deliveries      WebhookDelivery[]
 
+  @@index([ownerId, isActive])
   @@index([isActive])
   @@map("webhook_endpoints")
 }
@@ -241,17 +254,20 @@ model WebhookDelivery {
 }
 
 model IntegrationConnection {
-  id                   String       @id @default(uuid())
+  id                   String   @id @default(uuid())
+  ownerId              String
   provider             String
   externalAccountId    String?
   label                String
   credentialsEncrypted String
   metadata             Json?
-  isActive             Boolean      @default(true)
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  owner                User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@unique([provider, externalAccountId])
+  @@index([ownerId, isActive])
   @@index([isActive])
   @@map("integration_connections")
 }

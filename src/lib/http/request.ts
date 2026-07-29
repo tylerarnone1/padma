@@ -1,38 +1,56 @@
+import { getServerEnvironment, getTrustedOrigins } from "@/lib/env/server";
 import { ApplicationError } from "@/lib/http/errors";
 
 const DEFAULT_MAXIMUM_BODY_BYTES = 32 * 1024;
 
-function hostHeaderOrigin(request: Request): string | null {
-  const host = request.headers.get("host");
-  if (!host) return null;
+const loopbackHostnames = ["localhost", "127.0.0.1", "[::1]"];
 
-  try {
-    const requestUrl = new URL(request.url);
-    const hostUrl = new URL(`${requestUrl.protocol}//${host}`);
-    if (
-      hostUrl.username ||
-      hostUrl.password ||
-      hostUrl.pathname !== "/" ||
-      hostUrl.search ||
-      hostUrl.hash
-    ) {
-      return null;
-    }
-    return hostUrl.origin;
-  } catch {
-    return null;
+/**
+ * `localhost` and `127.0.0.1` are the same origin to a developer but different
+ * origins to the URL parser, and Next may canonicalize one into the other. The
+ * aliases are treated as equivalent only outside production, and only when the
+ * request already arrived on a loopback address.
+ */
+function addLoopbackAliases(origins: Set<string>, requestUrl: URL): void {
+  if (getServerEnvironment().NODE_ENV === "production") return;
+  if (!loopbackHostnames.includes(requestUrl.hostname)) return;
+
+  const port = requestUrl.port ? `:${requestUrl.port}` : "";
+  for (const hostname of loopbackHostnames) {
+    origins.add(`${requestUrl.protocol}//${hostname}${port}`);
   }
+}
+
+/**
+ * Origins this deployment will accept a cookie-authenticated mutation from.
+ *
+ * The request's own origin is included because a direct, unproxied request is
+ * self-consistent. The rest come from configuration rather than from the `Host`
+ * header: reflecting `Host` makes the trust anchor partly attacker-influenced
+ * whenever a proxy forwards an unvalidated host, and `TRUSTED_ORIGINS` already
+ * exists for deployments that terminate on a different origin.
+ */
+function acceptedOrigins(request: Request): Set<string> {
+  const requestUrl = new URL(request.url);
+  const origins = new Set<string>([requestUrl.origin]);
+
+  for (const configured of getTrustedOrigins()) {
+    try {
+      origins.add(new URL(configured).origin);
+    } catch {
+      // A malformed configured origin is ignored rather than widening trust.
+    }
+  }
+
+  addLoopbackAliases(origins, requestUrl);
+
+  return origins;
 }
 
 export function assertSameOrigin(request: Request): string {
   const origin = request.headers.get("origin");
-  const requestOrigin = new URL(request.url).origin;
-  const acceptedOrigins = new Set([
-    requestOrigin,
-    hostHeaderOrigin(request),
-  ]);
 
-  if (!origin || !acceptedOrigins.has(origin)) {
+  if (!origin || !acceptedOrigins(request).has(origin)) {
     throw new ApplicationError(
       "The request origin could not be verified.",
       403,

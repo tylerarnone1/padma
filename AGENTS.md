@@ -21,13 +21,17 @@ Optimize for correctness and explicit boundaries before brevity.
    database JSON as untrusted input.
 5. Validate at the trust boundary with a strict schema. Reject unknown fields.
 6. Sensitive operations require `requireRecentMfa`, not merely an account-level
-   MFA flag.
+   MFA flag. Changing a second factor is itself a sensitive operation: enrolling,
+   replacing, revealing, or removing one is guarded in `mfa-guard.ts` and must
+   never become reachable with only a session.
 7. Never log passwords, cookies, tokens, secrets, raw provider payloads, or
    unnecessary PII.
 8. Audit security-sensitive success, denial, and failure outcomes. Operational
    logs are not audit records.
-9. Commit domain state and its `OutboxEvent` in the same database transaction.
-   Do not call third parties inside domain transactions.
+9. Commit domain state and its `OutboxEvent` in the same database transaction
+   using `enqueueIntegrationEvent`, which accepts only a transaction client. Do
+   not call third parties inside domain transactions. Every event states its
+   audience through `ownerId`; `null` means no audience, never everyone.
 10. Integration consumers are idempotent. Webhooks are signed, bounded,
     retried, and checked against SSRF.
 11. Expected errors are typed return values or `ApplicationError`s. Unexpected
@@ -45,8 +49,13 @@ Optimize for correctness and explicit boundaries before brevity.
 - `src/components/ui`: reusable visual primitives with no domain knowledge.
 - `src/features/<feature>`: vertical product slices.
 - `src/lib`: cross-cutting infrastructure only.
-- `prisma`: canonical persistence schema, migrations, and seed.
-- `docs`: architecture, threat model, and decisions.
+- `prisma`: canonical persistence schema and seed. Padma commits no migration
+  history; `prisma/schema.prisma` is the source of truth and
+  `prisma/migrations/` is gitignored. A product built on Padma creates its own
+  migrations from its first schema change onward.
+- `docs`: architecture, threat model, and decisions. Planned work and known
+  unfixed defects are recorded in `docs/road-to-1.0.md`; read it before starting
+  a substantial change so you extend the plan rather than duplicating it.
 - `scripts`: bounded developer and worker entry points.
 
 A feature may contain `components`, `data`, `policies`, `schemas`, `services`,
@@ -55,6 +64,12 @@ and `tests`. Create one with:
 ```bash
 npm run generate:feature -- feature-name
 ```
+
+The generator emits a working default-deny slice: an ownership declaration, a
+policy separating permission from ownership, an owner-scoped repository, a
+service that refuses before it queries, and authorization tests including
+non-disclosure cases. One generated test fails until `ownership.ts` declares an
+ownership model. Do not delete or skip that test. Answer it.
 
 ## Required operation order
 
@@ -140,8 +155,13 @@ security regression. A happy-path UI test is not an authorization test.
 
 ## Local development
 
-- `npm run dev` starts Compose PostgreSQL, waits for health, applies committed
-  migrations, seeds local fixtures, and launches Next.js.
+- `npm run dev` starts Compose PostgreSQL, waits for health, verifies the database
+  against `prisma/schema.prisma`, seeds local fixtures, and launches Next.js.
+- Startup creates the schema only when the database is empty. If the schema and
+  the database have diverged it prints the difference and refuses to start; it
+  never reconciles an existing database. After changing `prisma/schema.prisma`,
+  tell the user to run `npm run db:push` (applies it, may drop data) or
+  `npm run db:reset` (rebuilds it). Do not add schema application to startup.
 - PostgreSQL uses host port `5433` by default to avoid an unrelated local
   instance on `5432`, and Compose binds it to `127.0.0.1` only.
 - `scripts/dev.ts` pins child processes to the container it started.

@@ -1,12 +1,27 @@
 import "server-only";
 
 import { z } from "zod";
-import { authModes } from "@/lib/auth/auth-mode";
+import { authModes, isLoopbackHostname } from "@/lib/auth/auth-mode";
 
 function emptyStringToUndefined(value: unknown): unknown {
   return typeof value === "string" && value.trim() === ""
     ? undefined
     : value;
+}
+
+function isLoopbackUrl(value: string): boolean {
+  try {
+    return isLoopbackHostname(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function splitTrustedOrigins(value: string): string[] {
+  return value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 }
 
 const optionalSecret = z.preprocess(
@@ -82,6 +97,53 @@ const serverEnvironmentSchema = z
         message: "INTEGRATION_ENCRYPTION_KEY is required in production",
       });
     }
+
+    // `AUTH_MODE` and `NODE_ENV` both default to their development values, so a
+    // deployment that forgets to set them would otherwise inherit mock
+    // authentication. Refuse to start on the combination that matters: mock
+    // mode with a public application origin. The runtime gate in auth-mode.ts
+    // would still deny, but failing at startup makes the misconfiguration
+    // visible instead of silent.
+    if (environment.AUTH_MODE === "mock" && !isLoopbackUrl(environment.APP_URL)) {
+      context.addIssue({
+        code: "custom",
+        path: ["AUTH_MODE"],
+        message:
+          'AUTH_MODE="mock" requires a loopback APP_URL. Set AUTH_MODE="oauth" for any non-local origin.',
+      });
+    }
+
+    for (const origin of splitTrustedOrigins(environment.TRUSTED_ORIGINS)) {
+      let parsed: URL;
+      try {
+        parsed = new URL(origin);
+      } catch {
+        context.addIssue({
+          code: "custom",
+          path: ["TRUSTED_ORIGINS"],
+          message: `"${origin}" is not an absolute URL`,
+        });
+        continue;
+      }
+
+      // Trusted origins decide which cross-origin mutations are accepted, so a
+      // path or credentials in one is a configuration error, not a detail to
+      // normalize away.
+      if (
+        !["http:", "https:"].includes(parsed.protocol) ||
+        parsed.username ||
+        parsed.password ||
+        parsed.pathname !== "/" ||
+        parsed.search ||
+        parsed.hash
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["TRUSTED_ORIGINS"],
+          message: `"${origin}" must be a bare http(s) origin`,
+        });
+      }
+    }
   });
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;
@@ -130,8 +192,6 @@ export function getTrustedOrigins(): string[] {
   const environment = getServerEnvironment();
   return [
     environment.APP_URL,
-    ...environment.TRUSTED_ORIGINS.split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean),
+    ...splitTrustedOrigins(environment.TRUSTED_ORIGINS),
   ];
 }

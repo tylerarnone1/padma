@@ -1,5 +1,9 @@
 import { ZodError, z } from "zod";
-import { ApplicationError, ValidationError } from "@/lib/http/errors";
+import {
+  ApplicationError,
+  RateLimitedError,
+  ValidationError,
+} from "@/lib/http/errors";
 import { logger } from "@/lib/logging/logger";
 
 type ProblemDetails = {
@@ -103,6 +107,9 @@ export function problemResponse(
       "content-type": "application/problem+json",
       "cache-control": "no-store",
       "x-request-id": requestId,
+      ...(applicationError instanceof RateLimitedError
+        ? { "retry-after": String(applicationError.retryAfterSeconds) }
+        : {}),
     },
   });
 }

@@ -28,12 +28,30 @@ for every item before launch.
 - Keep development servers and mock authentication off shared or public
   networks.
 
+## Request handling
+
+- Terminate `x-forwarded-for` at a trusted edge and overwrite any client-supplied
+  value. Unauthenticated rate limiting keys on it and is otherwise spoofable.
+- Set `TRUSTED_ORIGINS` for every additional origin that serves the application.
+  Same-origin checks accept only `APP_URL`, that list, and the request's own
+  origin; the `Host` header is deliberately not trusted.
+- Confirm `AUTH_MODE="oauth"` and a non-loopback `APP_URL`. Startup rejects the
+  mock combination, so a failed boot here is the control working.
+- Review the per-route rate limits against expected traffic. They are fixed
+  windows and permit slight overshoot at a boundary.
+
 ## Data and operations
 
-- Apply committed migrations before serving a new release.
+- Own your schema history before your first deployment: run
+  `npm run db:migrate -- --name init`, commit the result, and apply migrations
+  with `prisma migrate deploy`. Never deploy with `prisma db push`; it is a
+  local bootstrap and can drop columns to force the database to match.
 - Schedule both outbox and webhook-delivery processing continuously.
-- Alert on stale processing leases, exhausted deliveries, audit failures,
-  authentication anomalies, and repeated authorization denials.
+- Alert on stale processing leases, exhausted outbox events and deliveries
+  (logged at error level), audit failures, authentication anomalies, and
+  repeated authorization denials.
+- Alert on `mfa:enable`, `mfa:disable`, and `mfa:get-totp-uri` audit events.
+  A factor change the user did not initiate is an account-takeover signal.
 - Define backup, point-in-time recovery, restore testing, retention, privacy
   erasure, and incident-response procedures.
 - Treat audit data as sensitive. Restrict mutation and retention access.

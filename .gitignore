@@ -43,6 +43,11 @@ yarn-error.log*
 # generated database client
 /src/generated/prisma
 
+# Padma ships a schema, not a migration history. Until the first public release
+# the baseline is a local artifact regenerated from prisma/schema.prisma, and a
+# consumer's first migration is their own. See the migration policy in README.md.
+/prisma/migrations/
+
 # vercel
 .vercel
 

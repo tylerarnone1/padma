@@ -5,6 +5,10 @@ import { auth, type AuthSession } from "@/lib/auth/auth";
 import { isDevelopmentAuthRequestEnabled } from "@/lib/auth/auth-mode";
 import { hasValidDevelopmentSessionCookie } from "@/lib/auth/development-session-cookie";
 import { getDevelopmentSession } from "@/lib/auth/development-session";
+import {
+  isRecentMfaTimestamp,
+  RECENT_MFA_MAXIMUM_AGE_MS,
+} from "@/lib/auth/mfa-recency";
 import { getAuthSecret, getServerEnvironment } from "@/lib/env/server";
 import {
   AuthenticationRequiredError,
@@ -48,17 +52,17 @@ export async function requireSession(
 
 export function hasRecentMfa(
   session: AuthSession,
-  maximumAgeMs = 15 * 60 * 1000,
+  maximumAgeMs = RECENT_MFA_MAXIMUM_AGE_MS,
 ): boolean {
   if (!session.user.twoFactorEnabled) {
     return false;
   }
 
-  const verifiedAt = session.session.mfaVerifiedAt;
-  if (!(verifiedAt instanceof Date)) return false;
-
-  const ageMs = Date.now() - verifiedAt.getTime();
-  return ageMs >= -30_000 && ageMs <= maximumAgeMs;
+  return isRecentMfaTimestamp(
+    session.session.mfaVerifiedAt,
+    new Date(),
+    maximumAgeMs,
+  );
 }
 
 export function assertRecentMfa(session: AuthSession): void {

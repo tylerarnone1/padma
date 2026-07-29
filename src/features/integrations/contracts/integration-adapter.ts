@@ -3,6 +3,12 @@ export type IntegrationEvent = {
   topic: string;
   aggregateType: string;
   aggregateId: string;
+  /**
+   * Who the event is about, and therefore who may receive it. `null` means the
+   * event has no user-facing audience; it is never a wildcard. Adapters must
+   * treat an unmatched owner as "deliver to nothing".
+   */
+  ownerId: string | null;
   payload: unknown;
   occurredAt: Date;
 };

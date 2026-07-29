@@ -48,8 +48,10 @@ jobs:
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Apply committed migrations
-        run: npm run db:deploy
+      # The service container is empty on every run, so applying the schema
+      # directly is unambiguous here. Local startup deliberately refuses to.
+      - name: Create the database schema
+        run: npm run db:push
 
       - name: Validate Prisma schema
         run: npx prisma validate

@@ -196,13 +196,13 @@ textarea {
 
    Each ring rests at a shallower angle than the one outside it, which is what
    gives the open flower its cupped centre instead of a flat daisy face. */
-.padma-ring[data-ring="sepal"] {
-  --ring-step: 60deg;
-  --ring-scale: 0.34;
-  --petal-open: -34deg;
+.padma-ring[data-ring="base"] {
+  --ring-step: 45deg;
+  --ring-scale: 0.56;
+  --petal-open: -42deg;
   --petal-reach: -16%;
-  --petal-fill: color-mix(in oklch, var(--muted) 94%, white);
-  --petal-stroke: color-mix(in oklch, var(--muted) 84%, black);
+  --petal-fill: color-mix(in oklch, var(--primary) 24%, white);
+  --petal-stroke: color-mix(in oklch, var(--primary) 72%, black);
   transform: rotateZ(30deg);
 }
 
@@ -232,11 +232,12 @@ textarea {
   transform: rotateZ(34deg);
 }
 
-/* Sepals are narrower and leaf-like, not petal-shaped. */
-.padma-ring[data-ring="sepal"] > .padma-petal {
-  width: 16%;
-  height: 42%;
-  margin-left: -8%;
+/* The base petals are smaller than the outer whorl, but broad enough to read
+   as cupped petals rather than a ring of detached spikes. */
+.padma-ring[data-ring="base"] > .padma-petal {
+  width: 36%;
+  height: 44%;
+  margin-left: -18%;
 }
 
 .padma-petal {
@@ -319,24 +320,56 @@ textarea {
   --petal-vary: 0.96;
 }
 
-.padma-petal > path {
+.padma-petal > .padma-petal-body {
   fill: var(--petal-fill);
   stroke: var(--petal-stroke);
   /* The stroke scales with the geometry. `non-scaling-stroke` renders stippled
      under the heavy 3D scale of the petal dive, and a scaled outline reads more
      naturally there anyway. Width is in the 60x112 viewBox's own units. */
-  stroke-width: 1.6;
+  stroke-width: 1.15;
+  stroke-linejoin: round;
 }
 
-/* Inner highlight: reads as the curve of the petal catching light. */
-.padma-petal > .padma-petal-inner {
-  fill: color-mix(in oklch, transparent 82%, black);
+/* A five-stop diagonal glaze gives each otherwise flat SVG plane a rounded
+   cross-section. The hue still comes entirely from the active theme; these
+   translucent stops only describe light falling across that colour. */
+.padma-petal > .padma-petal-depth {
   stroke: none;
+  pointer-events: none;
+}
+
+.padma-depth-shadow {
+  stop-color: var(--petal-stroke);
+  stop-opacity: 0.28;
+}
+
+.padma-depth-shadow-soft {
+  stop-color: var(--petal-stroke);
+  stop-opacity: 0.16;
+}
+
+.padma-depth-highlight {
+  stop-color: white;
+  stop-opacity: 0.3;
+}
+
+.padma-depth-clear {
+  stop-color: white;
+  stop-opacity: 0;
+}
+
+/* A restrained, hooked vein gives the open bloom ornamental linework without
+   putting a filled almond inside every furled petal. */
+.padma-petal > .padma-petal-inner {
+  fill: none;
+  stroke: color-mix(in oklch, var(--petal-stroke) 42%, transparent);
+  stroke-width: 0.9;
+  stroke-linecap: round;
 }
 
 /* The petal the camera dives into brightens and gains a defined edge. The
    `:not()` keeps this off the inner highlight, which it would otherwise win. */
-.padma-petal[data-petal-focus] > path:not(.padma-petal-inner) {
+.padma-petal[data-petal-focus] > .padma-petal-body {
   fill: color-mix(
     in oklch,
     var(--primary) calc(40% + var(--focus-strength) * 52%),
@@ -476,8 +509,8 @@ textarea {
       animation-timeline: --padma-bloom;
     }
 
-    .padma-ring[data-ring="sepal"] {
-      animation-name: padma-unfurl-sepal;
+    .padma-ring[data-ring="base"] {
+      animation-name: padma-unfurl-base;
       animation-range: contain 0% contain 12%;
     }
 
@@ -605,9 +638,12 @@ textarea {
    order so the interpolation stays smooth, and the bloom is held in the upper
    band of the frame through the opening beats to keep the copy legible. */
 @keyframes padma-camera {
-  /* Furled bud, top-centre. Pairs with the hero. */
+  /* Begin partway through the unfurl. The staggered, three-quarter bulb is a
+     stronger hero silhouette than the sealed, nearly symmetrical pose that
+     previously occupied the first few percent of the scroll. */
   0% {
-    transform: translate3d(0, 2vh, 0) rotateX(42deg) rotateZ(-40deg) scale(1.15);
+    transform: translate3d(0, 2vh, 0) rotateX(41.5deg) rotateZ(-33deg)
+      scale(1.1625);
   }
   10% {
     transform: translate3d(0, 2vh, 0) rotateX(40deg) rotateZ(-12deg) scale(1.2);
@@ -638,7 +674,8 @@ textarea {
 /* Narrow screens keep the bloom centred and never form a second column. */
 @keyframes padma-camera-compact {
   0% {
-    transform: translate3d(0, 3vh, 0) rotateX(42deg) rotateZ(-36deg) scale(1);
+    transform: translate3d(0, 3vh, 0) rotateX(41.5deg) rotateZ(-30deg)
+      scale(1.01);
   }
   10% {
     transform: translate3d(0, 3vh, 0) rotateX(40deg) rotateZ(-12deg) scale(1.04);
@@ -665,7 +702,7 @@ textarea {
 
 @keyframes padma-unfurl-outer {
   from {
-    --petal-open: -97deg;
+    --petal-open: -94deg;
     --petal-reach: -12%;
     --petal-fan: 1;
   }
@@ -702,22 +739,22 @@ textarea {
   }
 }
 
-/* The collar barely moves: it is already spread on a closed bud. */
-@keyframes padma-unfurl-sepal {
+/* The supporting petals cup the bud before relaxing beneath the open bloom. */
+@keyframes padma-unfurl-base {
   from {
-    --petal-open: -44deg;
+    --petal-open: -53deg;
     --petal-reach: -12%;
   }
   to {
-    --petal-open: -34deg;
+    --petal-open: -42deg;
     --petal-reach: -16%;
   }
 }
 
 @keyframes padma-emerge {
   0% {
-    --bloom-shadow: 0.95;
-    --bloom-glow: 0;
+    --bloom-shadow: 0.88;
+    --bloom-glow: 0.04;
     --focus-strength: 0;
     --stamen-reveal: 0;
   }

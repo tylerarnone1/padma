@@ -24,11 +24,13 @@
     "check": "npm run typecheck && npm run lint && npm run test:coverage",
     "generate:feature": "tsx scripts/create-feature.ts",
     "db:generate": "prisma generate",
+    "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:stop": "docker compose down",
+    "db:reset": "docker compose down -v && npm run dev:prepare",
     "outbox:drain": "tsx scripts/process-outbox.ts",
     "postinstall": "prisma generate"
   },

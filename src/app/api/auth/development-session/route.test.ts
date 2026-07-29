@@ -5,11 +5,20 @@ const mocks = vi.hoisted(() => ({
   getAuthSecret: vi.fn(),
   getDevelopmentSession: vi.fn(),
   createToken: vi.fn(),
+  assertWithinRateLimit: vi.fn(),
+  getTrustedOrigins: vi.fn(),
+}));
+
+vi.mock("@/lib/http/rate-limit", () => ({
+  assertWithinRateLimit: mocks.assertWithinRateLimit,
+  rateLimitKey: (scope: string, subject: string) => `${scope}:${subject}`,
+  rateLimitSubject: () => "address:test",
 }));
 
 vi.mock("@/lib/env/server", () => ({
   getServerEnvironment: mocks.getEnvironment,
   getAuthSecret: mocks.getAuthSecret,
+  getTrustedOrigins: mocks.getTrustedOrigins,
 }));
 
 vi.mock("@/lib/auth/development-session", () => ({
@@ -48,6 +57,8 @@ function request(
 describe("development session route", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mocks.assertWithinRateLimit.mockResolvedValue(undefined);
+    mocks.getTrustedOrigins.mockReturnValue(["http://localhost:3000"]);
     mocks.getEnvironment.mockReturnValue({
       APP_URL: "http://localhost:3000",
       AUTH_MODE: "mock",

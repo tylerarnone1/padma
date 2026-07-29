@@ -53,6 +53,144 @@ function run(
   });
 }
 
+/** Runs a command that communicates through its exit code rather than failing. */
+function runForExitCode(
+  command: string,
+  arguments_: readonly string[],
+  environment: NodeJS.ProcessEnv,
+  stdio: "inherit" | "ignore",
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, arguments_, {
+      env: environment,
+      stdio,
+      windowsHide: true,
+    });
+
+    child.once("error", reject);
+    child.once("exit", (code) => resolve(code ?? 1));
+  });
+}
+
+/**
+ * An error whose message is already the complete instruction to the developer.
+ * The generic startup hint is suppressed for these.
+ */
+class ActionableStartupError extends Error {}
+
+/** `prisma migrate diff --exit-code`: 0 means no difference, 2 means differences. */
+const DIFF_NO_DIFFERENCE = 0;
+const DIFF_DIFFERENCES = 2;
+
+function schemaPath(): string {
+  return path.resolve("prisma", "schema.prisma");
+}
+
+async function databaseIsEmpty(
+  prismaCli: string,
+  environment: NodeJS.ProcessEnv,
+): Promise<boolean> {
+  const code = await runForExitCode(
+    process.execPath,
+    [
+      prismaCli,
+      "migrate",
+      "diff",
+      "--from-empty",
+      "--to-config-datasource",
+      "--exit-code",
+    ],
+    environment,
+    "ignore",
+  );
+  return code === DIFF_NO_DIFFERENCE;
+}
+
+async function databaseMatchesSchema(
+  prismaCli: string,
+  environment: NodeJS.ProcessEnv,
+): Promise<boolean> {
+  const code = await runForExitCode(
+    process.execPath,
+    [
+      prismaCli,
+      "migrate",
+      "diff",
+      "--from-config-datasource",
+      "--to-schema",
+      schemaPath(),
+      "--exit-code",
+    ],
+    environment,
+    "ignore",
+  );
+
+  if (code === DIFF_NO_DIFFERENCE) return true;
+  if (code === DIFF_DIFFERENCES) return false;
+
+  throw new Error(
+    "Could not compare prisma/schema.prisma with the database schema.",
+  );
+}
+
+/**
+ * Brings an *empty* database up to the current schema, and otherwise refuses to
+ * touch it.
+ *
+ * Startup must never reconcile an existing database. A schema edit — including
+ * one an agent made on your behalf — would silently rewrite local data the next
+ * time the app booted, and a dropped column looks identical to a feature that
+ * "just worked". Drift is reported and the developer chooses what happens next.
+ */
+async function prepareDatabaseSchema(
+  prismaCli: string,
+  environment: NodeJS.ProcessEnv,
+): Promise<void> {
+  if (await databaseIsEmpty(prismaCli, environment)) {
+    console.log("Creating the database schema from prisma/schema.prisma…");
+    await run(process.execPath, [prismaCli, "db", "push"], environment);
+    return;
+  }
+
+  if (await databaseMatchesSchema(prismaCli, environment)) {
+    console.log("Database schema matches prisma/schema.prisma.");
+    return;
+  }
+
+  console.error(
+    "\nprisma/schema.prisma no longer matches your local database:\n",
+  );
+  await runForExitCode(
+    process.execPath,
+    [
+      prismaCli,
+      "migrate",
+      "diff",
+      "--from-config-datasource",
+      "--to-schema",
+      schemaPath(),
+    ],
+    environment,
+    "inherit",
+  );
+
+  throw new ActionableStartupError(
+    [
+      "",
+      "Startup will not change your database for you.",
+      "",
+      "Review the difference above, then choose:",
+      "",
+      "  npm run db:push    apply it to the existing database",
+      "                     (can drop columns and the data in them)",
+      "  npm run db:reset   discard the local database and rebuild it",
+      "",
+      "If you did not expect a schema change, check `git diff prisma/schema.prisma`",
+      "before running either command.",
+    ].join("\n"),
+  );
+}
+
 async function main(): Promise<void> {
   if (prepareOnly && nextOnly) {
     throw new Error("--prepare-only and --next-only cannot be combined.");
@@ -88,8 +226,7 @@ async function main(): Promise<void> {
       environment,
     );
 
-    console.log("Applying committed database migrations…");
-    await run(process.execPath, [prismaCli, "migrate", "deploy"], environment);
+    await prepareDatabaseSchema(prismaCli, environment);
 
     console.log("Seeding permissions and development fixtures…");
     await run(process.execPath, [tsxCli, "prisma/seed.ts"], environment);
@@ -116,6 +253,14 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
+  // An actionable error already says exactly what to do; the generic hint would
+  // only bury it.
+  if (error instanceof ActionableStartupError) {
+    console.error(error.message);
+    process.exitCode = 1;
+    return;
+  }
+
   const message =
     error instanceof Error ? error.message : "Unknown development startup error";
   console.error(`\nPadma development startup failed: ${message}`);

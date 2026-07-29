@@ -11,6 +11,18 @@ type Enrollment = {
   backupCodes: string[];
 };
 
+/**
+ * Changing a factor is gated server-side: an enrolled user must verify the
+ * current factor first, and a user with no factor needs a recent sign-in. Both
+ * denials are recoverable, so they get an explicit next step rather than a bare
+ * error string.
+ */
+function recoveryFor(code: string | undefined): "verify" | "reauthenticate" | null {
+  if (code === "RECENT_MFA_REQUIRED") return "verify";
+  if (code === "FRESH_SESSION_REQUIRED") return "reauthenticate";
+  return null;
+}
+
 export function MfaSetup({
   enabled,
   appName,
@@ -22,11 +34,15 @@ export function MfaSetup({
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [code, setCode] = useState("");
   const [message, setMessage] = useState("");
+  const [recovery, setRecovery] = useState<
+    "verify" | "reauthenticate" | null
+  >(null);
   const [pending, setPending] = useState(false);
 
   async function beginEnrollment() {
     setPending(true);
     setMessage("");
+    setRecovery(null);
     const result = await authClient.twoFactor.enable({
       issuer: appName,
     });
@@ -35,6 +51,7 @@ export function MfaSetup({
       setMessage(
         result.error?.message || "Multi-factor enrollment could not begin.",
       );
+      setRecovery(recoveryFor(result.error?.code));
     } else {
       setEnrollment({
         totpURI: result.data.totpURI,
@@ -138,9 +155,23 @@ export function MfaSetup({
       )}
 
       {message && (
-        <p role="alert" className="text-sm text-danger">
-          {message}
-        </p>
+        <div role="alert" className="space-y-2">
+          <p className="text-sm text-danger">{message}</p>
+          {recovery === "verify" && (
+            <p className="text-sm leading-6 text-muted">
+              Enter a current authenticator code above, then start setup again.
+              If you no longer have the device, use a recovery code instead.
+            </p>
+          )}
+          {recovery === "reauthenticate" && (
+            <a
+              href="/sign-in"
+              className="inline-block text-sm font-semibold underline"
+            >
+              Sign in again to continue
+            </a>
+          )}
+        </div>
       )}
     </div>
   );

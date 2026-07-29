@@ -3,21 +3,36 @@ import { developmentAccount } from "@/mock-data/development-account";
 
 export const DEVELOPMENT_SESSION_COOKIE = "padma.development-session";
 
-const tokenVersion = "v1";
+const tokenVersion = "v2";
 const tokenPurpose = "padma-local-development-session";
 
-export function createDevelopmentSessionToken(secret: string): string {
-  const payload = `${tokenVersion}.${developmentAccount.id}`;
-  const signature = createHmac("sha256", secret)
+export const DEVELOPMENT_SESSION_LIFETIME_MS = 8 * 60 * 60 * 1000;
+
+function sign(secret: string, payload: string): string {
+  return createHmac("sha256", secret)
     .update(`${tokenPurpose}.${payload}`)
     .digest("base64url");
+}
 
-  return `${payload}.${signature}`;
+/**
+ * Mints a local development session token.
+ *
+ * The expiry is inside the signed payload, not only in the cookie's `Max-Age`.
+ * A cookie attribute is a client-side hint: a copied token value would
+ * otherwise stay valid for as long as mock mode is enabled.
+ */
+export function createDevelopmentSessionToken(
+  secret: string,
+  expiresAtMs: number = Date.now() + DEVELOPMENT_SESSION_LIFETIME_MS,
+): string {
+  const payload = `${tokenVersion}.${developmentAccount.id}.${expiresAtMs}`;
+  return `${payload}.${sign(secret, payload)}`;
 }
 
 export function hasValidDevelopmentSessionCookie(
   requestHeaders: Headers,
   secret: string,
+  now: number = Date.now(),
 ): boolean {
   const cookieHeader = requestHeaders.get("cookie");
   if (!cookieHeader) {
@@ -40,11 +55,38 @@ export function hasValidDevelopmentSessionCookie(
     return false;
   }
 
-  const expected = Buffer.from(createDevelopmentSessionToken(secret));
-  const received = Buffer.from(token);
+  const parts = token.split(".");
+  if (parts.length !== 4) {
+    return false;
+  }
 
-  return (
-    expected.length === received.length &&
-    timingSafeEqual(expected, received)
+  const [version, accountId, expiresAt, signature] = parts as [
+    string,
+    string,
+    string,
+    string,
+  ];
+
+  if (version !== tokenVersion || accountId !== developmentAccount.id) {
+    return false;
+  }
+
+  if (!/^\d+$/.test(expiresAt)) {
+    return false;
+  }
+
+  // Signature first, so an attacker cannot learn anything from the ordering of
+  // the cheaper checks.
+  const expected = Buffer.from(
+    sign(secret, `${version}.${accountId}.${expiresAt}`),
   );
+  const received = Buffer.from(signature);
+  if (
+    expected.length !== received.length ||
+    !timingSafeEqual(expected, received)
+  ) {
+    return false;
+  }
+
+  return Number(expiresAt) > now;
 }

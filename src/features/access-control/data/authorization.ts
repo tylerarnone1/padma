@@ -99,5 +99,6 @@ export async function requirePermission(input: {
     },
   });
 
-  throw new ForbiddenError();
+  // Audited above, so route wrappers must not record it a second time.
+  throw new ForbiddenError(undefined, true);
 }

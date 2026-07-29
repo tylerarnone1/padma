@@ -16,14 +16,14 @@ an ongoing patching process.
 
 | Foundation | Implementation |
 | --- | --- |
-| Database | PostgreSQL 17, Prisma, one current baseline migration, idempotent seed |
+| Database | PostgreSQL 17, Prisma, schema-as-source-of-truth, idempotent seed |
 | Authentication | Passwordless GitHub and Google OAuth through Better Auth |
 | Local access | Guarded mock session so evaluation requires no OAuth setup |
-| MFA | TOTP enrollment and recent-verification checks for sensitive actions |
+| MFA | TOTP enrollment, recent-verification checks, a guarded factor lifecycle, and step-up lockout |
 | Authorization | Application-scoped `User → Role → Permission` RBAC |
-| Input security | Strict Zod schemas, body-size bounds, media-type and same-origin checks |
+| Input security | Strict Zod schemas, body-size bounds, media-type and same-origin checks, route rate limits |
 | Sessions | Server-side validation, revocation, protected cookies, trusted-origin controls |
-| Integrations | Transactional outbox, provider ports, signed webhooks, SSRF checks, retries |
+| Integrations | Owner-scoped transactional outbox, provider ports, signed webhooks, SSRF checks, retries |
 | Observability | Structured redacted logging, request correlation, durable audit events |
 | UI | Atomic components, error boundaries, 401/403/404 pages |
 | Themes | Five source primitives, generated light/dark modes, palette preview, Contrast Guard |
@@ -43,8 +43,9 @@ npm run dev
 ```
 
 `npm run dev` starts PostgreSQL on port `5433`, waits for it to become healthy,
-applies the committed baseline migration, seeds the development identity and
-administrator role, then starts Next.js bound to `127.0.0.1`. PostgreSQL is
+checks the database against `prisma/schema.prisma` (creating the schema only if
+the database is empty), seeds the development identity and administrator role,
+then starts Next.js bound to `127.0.0.1`. PostgreSQL is
 also published on loopback only. Mock authentication is intentionally
 unavailable from LAN addresses, containers, or public development tunnels.
 
@@ -58,7 +59,7 @@ development server invalidates existing mock cookies. Both `localhost` and
 `127.0.0.1` are supported loopback origins.
 
 Use `npm run dev:next` only when PostgreSQL is already prepared. It skips
-Compose, migrations, and seeding, but still binds Next.js to loopback and
+Compose, the schema check, and seeding, but still binds Next.js to loopback and
 injects one process-wide random signing secret. Starting `next dev` directly
 is intentionally unsupported because separately compiled server modules must
 not invent different cookie-signing secrets.
@@ -69,7 +70,7 @@ secret was injected cannot be repaired by hot reload.
 
 Open [http://localhost:3000/components](http://localhost:3000/components) to
 preview and refine every stock UI primitive in a standardized, feature-neutral
-workshop.
+workshop. It is a development tool and returns 404 in a production build.
 
 Stop the database with:
 
@@ -81,12 +82,14 @@ npm run db:stop
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Prepare PostgreSQL, migrate, seed, and start local Next.js |
+| `npm run dev` | Prepare PostgreSQL, verify the schema, seed, and start local Next.js |
 | `npm run dev:next` | Start only Next.js against an already prepared database |
 | `npm run generate:feature -- name` | Scaffold a product feature boundary |
 | `npm run outbox:drain` | Process currently available outbox and webhook work |
-| `npm run db:migrate -- --name change-name` | Create a reviewed development migration |
-| `npm run db:deploy` | Apply committed migrations without resetting data |
+| `npm run db:push` | Apply schema changes to the existing local database |
+| `npm run db:reset` | Discard the local database volume and rebuild from the schema |
+| `npm run db:migrate -- --name change-name` | Take ownership of the schema with your own migration |
+| `npm run db:deploy` | Apply your committed migrations without resetting data |
 | `npm run db:studio` | Inspect the local database with Prisma Studio |
 | `npm run check` | Run typecheck, lint, tests, and coverage thresholds |
 | `npm run build` | Produce the fail-closed production build |
@@ -97,14 +100,29 @@ npm run db:stop
 npm run generate:feature -- your-feature
 ```
 
-Before implementation, complete the generated feature README:
+The generator does not leave you an empty directory. It writes a working,
+default-deny vertical slice: an ownership declaration, a policy that keeps
+permission and ownership as separate checks, an owner-scoped repository, a
+service that refuses before it queries, and authorization tests that include the
+non-disclosure cases most implementations miss.
 
-- Who owns each record?
-- How may a caller address it?
+One generated test fails on purpose:
+
+```text
+Declare who owns a your-feature record in src/features/your-feature/ownership.ts
+```
+
+Padma cannot answer that for you, and an unanswered ownership question is the
+most common route to a broken authorization boundary. The failure clears as soon
+as the decision is recorded in code rather than in a comment.
+
+Then work through the rest of the generated README:
+
+- How may a caller address a record?
 - Which explicit permission protects each operation?
 - Which inputs cross a trust boundary?
 - What must be audited?
-- Which side effects need an outbox event?
+- Which side effects need an outbox event, and who is its audience?
 
 Padma does not answer those product questions with a hard-coded tenancy model.
 An app for one person, a public community, an internal tool, and a multi-tenant
@@ -162,15 +180,26 @@ delivery, applies bounded retries, and supports idempotent processing.
 This is the seam for broad automation platforms such as Zapier, Pipedream, or
 Nango. Product features remain independent of whichever provider is selected.
 
-Create a webhook through the protected application-level endpoint:
+Endpoints belong to the user who registered them, and an event is delivered only
+to endpoints owned by the party the event is about:
 
 ```text
-POST /api/webhooks
+POST   /api/webhooks               register an endpoint (signing secret returned once)
+GET    /api/webhooks               list your own endpoints
+DELETE /api/webhooks/{endpointId}  revoke one of your own endpoints
 ```
 
-The signing secret is returned once.
+Features emit events through `enqueueIntegrationEvent`, which accepts only a
+transaction client so domain state and its event commit together. Every event
+declares an `ownerId`. `null` means the event has no audience and reaches no
+endpoint; it never means everyone. See
+[docs/adr/0005-integration-event-audience.md](./docs/adr/0005-integration-event-audience.md).
 
 ## Real OAuth mode
+
+`AUTH_MODE="mock"` is only valid with a loopback `APP_URL`. Any other origin
+fails environment validation at startup rather than silently falling back, so a
+deployment cannot inherit mock authentication by forgetting to set it.
 
 Set:
 
@@ -206,19 +235,44 @@ docs/                   architecture, security, and ADRs
 scripts/                dev orchestration, generators, workers
 ```
 
-## Database migration policy
+## Database schema policy
 
-The repository currently ships one baseline migration that exactly matches
-`prisma/schema.prisma`. This is intentional for an unreleased starter: a new
-installation should create the current database directly, without replaying
-the private development history that produced it.
+Padma ships a schema, not a migration history. `prisma/migrations/` is
+gitignored, and `prisma/schema.prisma` is the single source of truth.
 
-The baseline may be regenerated or consolidated only before the first public
-release tag. Once anyone can deploy a published version, committed migrations
-are immutable history. Every later schema change must use a new forward-only
-migration; do not edit an applied migration or replace database constraints
-with application-only checks. `prisma db push` is not the project deployment
-workflow.
+`npm run dev` creates the schema when the database is **empty**, and otherwise
+never touches it. On every later start it compares the database against
+`prisma/schema.prisma`:
+
+- identical: it proceeds silently;
+- different: it prints the difference, refuses to start, and tells you to run
+  `npm run db:push` or `npm run db:reset`.
+
+Startup does not reconcile an existing database, deliberately. A schema edit —
+including one an agent made on your behalf — would otherwise rewrite your local
+data the next time you booted the app, and a dropped column is indistinguishable
+from a feature that just worked. Applying a schema change is always an explicit
+command you run yourself.
+
+```bash
+npm run db:reset   # discard the local volume and rebuild from the schema
+```
+
+**Your first migration is your own.** As soon as you have data worth keeping —
+which is well before your first deployment — take ownership of the schema:
+
+```bash
+npm run db:migrate -- --name init   # creates your baseline from the schema
+```
+
+From then on `prisma migrate deploy` is your deployment workflow and each schema
+change is a new forward-only migration. Commit them; they are your history. Do
+not edit one after it has been applied.
+
+`prisma db push` is a local bootstrap only. It is not a deployment tool: it can
+drop a column to make the database match the schema, and it records nothing about
+how it got there. Never replace a database constraint with an application-only
+check either — unique keys and foreign keys are part of the security model.
 
 ## Verification
 
@@ -240,7 +294,7 @@ with unique random values before building; never use CI placeholders in a
 deployment.
 
 Pull requests run the same checks against PostgreSQL, validate the Prisma
-schema, apply the committed migration, audit production dependencies, and build
+schema, synchronize the database with it, audit production dependencies, and build
 the application. Separate security automation performs dependency review and
 CodeQL analysis. GitHub Actions are pinned to immutable commits and maintained
 through Dependabot.
