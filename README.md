@@ -64,39 +64,44 @@ Requirements:
 
 ```bash
 npm install
-node -e "require('node:fs').copyFileSync('.env.example', '.env')"
-npm run dev
+npm run setup
+npm run dev:next
 ```
 
-`npm run dev` starts PostgreSQL on port `5433`, waits for it to become healthy,
-checks the database against `prisma/schema.prisma` (creating the schema only if
-the database is empty), seeds the development identity and administrator role,
-then starts Next.js bound to `127.0.0.1`. PostgreSQL is
-also published on loopback only. Mock authentication is intentionally
-unavailable from LAN addresses, containers, or public development tunnels.
+`npm run setup` checks Node.js, Docker, Compose, and the Docker daemon; selects
+coordinated loopback ports; creates the gitignored `.env` with persistent local
+secrets; prepares PostgreSQL; verifies the schema; and seeds the development
+identity and administrator role. It is safe to rerun: configured ports and
+nonblank secrets are preserved. The command never resets a database or applies
+schema drift.
 
-Open [http://localhost:3000](http://localhost:3000). The default
-`AUTH_MODE="mock"` adds a development-only mock-account button to `/sign-in`.
+After setup, `npm run dev:next` starts Next.js on the port recorded in
+`APP_URL`, bound to `127.0.0.1`. PostgreSQL is also published on loopback only.
+Mock authentication is intentionally unavailable from LAN addresses,
+containers, or public development tunnels.
+
+Open the URL printed by setup (`http://localhost:3000` when the default port is
+available). The default `AUTH_MODE="mock"` adds a development-only
+mock-account button to `/sign-in`.
 Choosing it creates an HTTP-only local session for the credential-free fixture
 in `src/mock-data/development-account.ts`. Mock mode only works with a
-development build, loopback `APP_URL`, and a loopback request. Its signing
-secret is random when `BETTER_AUTH_SECRET` is not configured, so restarting the
-development server invalidates existing mock cookies. Both `localhost` and
-`127.0.0.1` are supported loopback origins.
+development build, loopback `APP_URL`, and a loopback request. Setup persists
+the signing secret so ordinary restarts retain valid mock cookies. Both
+`localhost` and `127.0.0.1` are supported loopback origins.
 
-Use `npm run dev:next` only when PostgreSQL is already prepared. It skips
-Compose, the schema check, and seeding, but still binds Next.js to loopback and
-injects one process-wide random signing secret. Starting `next dev` directly
-is intentionally unsupported because separately compiled server modules must
-not invent different cookie-signing secrets.
+Use `npm run dev` for later all-in-one starts: it prepares PostgreSQL through
+the same fail-closed path and launches Next.js. Use `npm run dev:next` only when
+PostgreSQL is already prepared. Starting `next dev` directly is intentionally
+unsupported because it can diverge from `APP_URL` and separately compiled
+server modules must not invent different cookie-signing secrets.
 
 If mock sign-in returns to `/sign-in`, stop every existing Next.js development
 process and restart with `npm run dev`. A server started before its signing
 secret was injected cannot be repaired by hot reload.
 
-Open [http://localhost:3000/components](http://localhost:3000/components) to
-preview and refine every stock UI primitive in a standardized, feature-neutral
-workshop. It is a development tool and returns 404 in a production build.
+Open `/components` on the configured `APP_URL` to preview and refine every
+stock UI primitive in a standardized, feature-neutral workshop. It is a
+development tool and returns 404 in a production build.
 
 Stop the database with:
 
@@ -108,6 +113,7 @@ npm run db:stop
 
 | Command | Purpose |
 | --- | --- |
+| `npm run setup` | Create stable local configuration and prepare PostgreSQL safely |
 | `npm run dev` | Prepare PostgreSQL, verify the schema, seed, and start local Next.js |
 | `npm run dev:next` | Start only Next.js against an already prepared database |
 | `npm run generate:feature -- name` | Scaffold a product feature boundary |

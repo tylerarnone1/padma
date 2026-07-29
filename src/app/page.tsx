@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { BeatRail } from "@/components/ui/beat-rail";
 import { buttonProps } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -126,8 +127,8 @@ const STATS = [
 
 const SETUP_COMMANDS = [
   "npm install",
-  "copy .env.example .env",
-  "npm run dev",
+  "npm run setup",
+  "npm run dev:next",
   "npm run generate:feature -- your-feature",
 ] as const;
 
@@ -146,7 +147,11 @@ const BEATS = [
 ] as const;
 
 export default async function Home() {
-  const session = await getCurrentSession();
+  const [session, requestHeaders] = await Promise.all([
+    getCurrentSession(),
+    headers(),
+  ]);
+  const nonce = requestHeaders.get("x-nonce") ?? "";
   const primaryHref = session ? "/dashboard" : "/sign-in";
   const primaryLabel = session ? "Open dashboard" : "Sign in";
 
@@ -259,7 +264,7 @@ export default async function Home() {
                   className="padma-headline mt-6 font-semibold tracking-[-0.045em]"
                   aria-label={HERO_HEADING}
                 >
-                  <KineticHeadline phrases={HERO_PHRASES} />
+                  <KineticHeadline phrases={HERO_PHRASES} nonce={nonce} />
                 </h1>
                 <p className="padma-cue" aria-hidden="true">
                   <span className="padma-cue-track">
@@ -306,7 +311,7 @@ export default async function Home() {
                     data-kinetic="scroll"
                     aria-label={foundation.title}
                   >
-                    <KineticText text={foundation.title} />
+                    <KineticText text={foundation.title} nonce={nonce} />
                   </h2>
                   <p className="mt-6 max-w-[46ch] text-[clamp(1.05rem,1.2vw,1.7rem)] leading-[1.6] text-muted">
                     {foundation.description}
@@ -337,7 +342,7 @@ export default async function Home() {
             data-kinetic="scroll"
             aria-label={CLOSING_HEADLINE}
           >
-            <KineticText text={CLOSING_HEADLINE} />
+            <KineticText text={CLOSING_HEADLINE} nonce={nonce} />
           </h2>
           <p className="mt-4 max-w-2xl text-lg leading-8 text-muted">
             The invariants above are enforced in code, proven by tests, and

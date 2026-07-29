@@ -155,6 +155,10 @@ security regression. A happy-path UI test is not an authorization test.
 
 ## Local development
 
+- `npm run setup` preflights Node.js and Docker, selects coordinated loopback
+  ports on first run, persists gitignored development secrets, and prepares the
+  database through the same fail-closed path as startup. Reruns preserve
+  nonblank values and never rotate secrets or reassign configured ports.
 - `npm run dev` starts Compose PostgreSQL, waits for health, verifies the database
   against `prisma/schema.prisma`, seeds local fixtures, and launches Next.js.
 - Startup creates the schema only when the database is empty. If the schema and
@@ -162,8 +166,10 @@ security regression. A happy-path UI test is not an authorization test.
   never reconciles an existing database. After changing `prisma/schema.prisma`,
   tell the user to run `npm run db:push` (applies it, may drop data) or
   `npm run db:reset` (rebuilds it). Do not add schema application to startup.
-- PostgreSQL uses host port `5433` by default to avoid an unrelated local
-  instance on `5432`, and Compose binds it to `127.0.0.1` only.
+- PostgreSQL starts at host port `5433` by default and setup may select the
+  first free port through `5532`. Next.js starts at `3000` and setup may select
+  through `3099`. Both bind to `127.0.0.1`; `APP_URL` is the source of truth for
+  the Next.js port.
 - `scripts/dev.ts` pins child processes to the container it started.
 - The Next.js development server binds to `127.0.0.1`; do not expose mock
   authentication through LAN bindings or public tunnels.

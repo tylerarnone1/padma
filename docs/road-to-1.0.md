@@ -181,6 +181,45 @@ Build the library in three layers:
 The component workshop remains the isolated development surface. Actual starter
 pages prove that the components compose into a desirable product.
 
+### Session activity is a root-layout invariant
+
+Inactivity handling must work consistently across every page. Padma will mount
+one session-activity bridge in the top-level root layout so route changes,
+nested layouts, generated pages, and custom product layouts inherit the same
+behavior automatically. A feature must not implement its own competing idle
+timer.
+
+For an authenticated session, the client may treat pointer movement, pointer
+actions, keyboard interaction, touch, scrolling, window focus, and page
+visibility as activity signals. It will record only that meaningful activity
+occurred—not cursor coordinates, pressed keys, DOM content, or a replay of user
+behavior. Signals and server heartbeats must be throttled so ordinary cursor
+movement does not produce continuous network requests or database writes.
+
+The system will distinguish:
+
+- **idle timeout** — expires a session after a configurable period without
+  meaningful activity;
+- **absolute lifetime** — expires a session after a maximum age even if the
+  user remains active;
+- **recent MFA** — remains a separate requirement for sensitive operations and
+  is never refreshed by ordinary activity.
+
+The browser provides warning and continuation UX, but it is not the security
+authority. The server records bounded activity heartbeats and rejects an idle
+or absolutely expired session on every protected path. Client-side logout alone
+is insufficient.
+
+Multiple tabs must coordinate activity and expiry so they behave as one browser
+session. Activity counts only while a page is visible or its window is focused;
+background tabs cannot keep a session alive indefinitely. Idle expiry should
+propagate promptly to every open tab.
+
+The root-layout integration is part of Padma's agent contract and verification
+suite. Nested layouts may change presentation but must not bypass it. If the
+application ever permits an alternative root layout, that layout must satisfy
+the same tested contract before it can serve an authenticated page.
+
 ## Roadmap
 
 The phases are ordered. Adoption work runs alongside engineering rather than
@@ -188,7 +227,7 @@ waiting until the code is complete.
 
 ### Phase 0 — Establish the foundation
 
-**Status: substantially complete**
+**Status: complete**
 
 - Secure authentication with a deliberately isolated local mock mode.
 - Default-deny permissions, ownership policies, strict validation, and
@@ -203,15 +242,13 @@ waiting until the code is complete.
 - A distinctive animated landing page and clearer public positioning.
 - Schema-as-source-of-truth local development with fail-closed startup.
 
-**Remaining cleanup:** remove the `KineticText` sequence limit and keep the
-current check/build baseline green.
-
 ### Phase 1 — Nail the first ten minutes
 
-**Status: next**
+**Status: in progress**
 
-- Build `npm run setup` with environment preflight, coordinated ports,
-  persistent development secrets, and safe re-runs.
+- `npm run setup` now provides environment preflight, coordinated ports,
+  persistent development secrets, safe re-runs, and fail-closed database
+  preparation.
 - Ask the product-topology questions in ordinary language.
 - Make mock sign-in and the first generated feature immediately discoverable.
 - Improve generator errors and first-run diagnostics.
@@ -232,6 +269,8 @@ feature in under ten minutes without external credentials.
 - Replace the foundation-only dashboard with a useful product dashboard.
 - Add onboarding, profile, security, session management, and the minimum
   user/role administration experience.
+- Add root-layout activity detection, coordinated multi-tab idle warnings, and
+  server-enforced idle and absolute session expiration.
 - Add integrations, activity, and account-setting starter pages.
 - Add provider-neutral email and file-storage foundations.
 - Add health/readiness and a clear worker/scheduling path.
@@ -315,6 +354,10 @@ Padma is ready for 1.0 when all of the following are true:
 - `npm run check` and `npm run build` pass from a clean checkout.
 - Clone-to-protected-feature stays under the ten-minute budget.
 - All three supported topology choices have isolation tests.
+- Every authenticated page inherits the same session-activity system, and
+  protected requests fail after server-authoritative idle or absolute expiry.
+- Multi-tab activity, warning, continuation, and logout behavior have regression
+  coverage.
 - Generated features fail closed until ownership is declared.
 - Sensitive operations consistently require recent MFA.
 - Core side effects use the audit/outbox lane and retry safely.
@@ -345,9 +388,12 @@ Only decisions that can materially change the roadmap belong here:
 
 These are tracked here so they are not mistaken for existing capability:
 
-- Setup is still manual.
+- Setup now automates local configuration and database preparation; topology
+  recording and full clean-machine golden-path validation remain.
 - Product topology and organization membership are designed at roadmap level
   but not implemented.
+- Session activity detection and server-enforced inactivity timeout are not yet
+  implemented.
 - Session/user administration, email, file storage, pagination, readiness, and
   worker scheduling are incomplete or absent.
 - Request idempotency has a persistence model but no complete request path.

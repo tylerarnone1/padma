@@ -1283,10 +1283,11 @@
        .padma-char-hit  pointer state (transition, never animation)
          span           load entry
 
-   The sequence index cannot be passed as a prop under the production CSP, so it
-   is derived from `:nth-child` and combined into one `--seq` counter. The word
-   term is a fixed stride rather than the true character offset, which keeps the
-   wave continuous without needing to know each word's length.
+   The sequence index cannot use an inline style under the production CSP, so
+   KineticText emits nonce-authorized numeric `:nth-child` rules and combines
+   them into one `--seq` counter. The word term is a fixed stride rather than
+   the true character offset, which keeps the wave continuous without needing
+   to know each word's length.
    =========================================================================== */
 
 .padma-word {
@@ -1529,129 +1530,6 @@
     opacity: 0;
     transform: translateY(-0.85em);
   }
-}
-
-.padma-word:nth-child(1) {
-  --word-i: 0;
-}
-
-.padma-word:nth-child(2) {
-  --word-i: 1;
-}
-
-.padma-word:nth-child(3) {
-  --word-i: 2;
-}
-
-.padma-word:nth-child(4) {
-  --word-i: 3;
-}
-
-.padma-word:nth-child(5) {
-  --word-i: 4;
-}
-
-.padma-word:nth-child(6) {
-  --word-i: 5;
-}
-
-.padma-word:nth-child(7) {
-  --word-i: 6;
-}
-
-.padma-word:nth-child(8) {
-  --word-i: 7;
-}
-
-.padma-word:nth-child(9) {
-  --word-i: 8;
-}
-
-.padma-word:nth-child(10) {
-  --word-i: 9;
-}
-
-/* Eleven and twelve exist for the headline's longest phrase, which is eleven words
-   long. Without them its last word falls back to index zero and takes the first
-   word's turn — visible as one word arriving out of sequence. */
-.padma-word:nth-child(11) {
-  --word-i: 10;
-}
-
-.padma-word:nth-child(12) {
-  --word-i: 11;
-}
-
-.padma-char:nth-child(1) {
-  --char-i: 0;
-}
-
-.padma-char:nth-child(2) {
-  --char-i: 1;
-}
-
-.padma-char:nth-child(3) {
-  --char-i: 2;
-}
-
-.padma-char:nth-child(4) {
-  --char-i: 3;
-}
-
-.padma-char:nth-child(5) {
-  --char-i: 4;
-}
-
-.padma-char:nth-child(6) {
-  --char-i: 5;
-}
-
-.padma-char:nth-child(7) {
-  --char-i: 6;
-}
-
-.padma-char:nth-child(8) {
-  --char-i: 7;
-}
-
-.padma-char:nth-child(9) {
-  --char-i: 8;
-}
-
-.padma-char:nth-child(10) {
-  --char-i: 9;
-}
-
-.padma-char:nth-child(11) {
-  --char-i: 10;
-}
-
-.padma-char:nth-child(12) {
-  --char-i: 11;
-}
-
-.padma-char:nth-child(13) {
-  --char-i: 12;
-}
-
-.padma-char:nth-child(14) {
-  --char-i: 13;
-}
-
-.padma-char:nth-child(15) {
-  --char-i: 14;
-}
-
-.padma-char:nth-child(16) {
-  --char-i: 15;
-}
-
-.padma-char:nth-child(17) {
-  --char-i: 16;
-}
-
-.padma-char:nth-child(18) {
-  --char-i: 17;
 }
 
 /* ===========================================================================

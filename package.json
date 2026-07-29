@@ -11,6 +11,7 @@
     "node": ">=22.12"
   },
   "scripts": {
+    "setup": "tsx scripts/setup.ts",
     "dev": "tsx scripts/dev.ts",
     "dev:prepare": "tsx scripts/dev.ts --prepare-only",
     "dev:next": "tsx scripts/dev.ts --next-only",
