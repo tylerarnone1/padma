@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { TopNav } from "@/components/navigation/top-nav";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonProps } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
@@ -159,7 +160,27 @@ export default async function ComponentsPage() {
               <Button variant="secondary" disabled>
                 Secondary disabled
               </Button>
-              <Button className="min-h-11 px-5">Comfortable size</Button>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Button size="sm">Small</Button>
+              <Button size="md">Medium</Button>
+              <Button size="lg">Large</Button>
+              <Button variant="secondary" shape="pill">
+                Pill
+              </Button>
+            </div>
+            {/*
+             * A link, not a button. Anything that navigates has to be an anchor to
+             * keep middle-click and open-in-new-tab working, so it borrows the
+             * button's appearance instead of its element.
+             */}
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                href="/components#buttons"
+                {...buttonProps({ variant: "secondary", size: "lg" })}
+              >
+                Navigates like a link
+              </Link>
             </div>
           </div>
         </PreviewSection>

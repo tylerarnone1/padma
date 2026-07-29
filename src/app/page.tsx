@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { BeatRail } from "@/components/ui/beat-rail";
+import { buttonProps } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { LotusBloom } from "@/components/ui/lotus-bloom";
+import { KineticHeadline } from "@/components/ui/kinetic-headline";
 import { KineticText } from "@/components/ui/kinetic-text";
 import { LotusMark } from "@/components/ui/lotus-mark";
 import { WordCycler } from "@/components/ui/word-cycler";
@@ -46,21 +48,61 @@ const foundations = [
   },
 ] as const;
 
-const HERO_HEADLINE = "Foundations open one layer at a time.";
 const CLOSING_HEADLINE = "Every layer, in one place";
 const REPOSITORY_URL = "https://github.com/tylerarnone1/padma";
 
 /**
- * The rotating term in the hero eyebrow: the boundaries the thesis below argues
- * cannot be retrofitted. Exactly five, because `landing.css` assigns one delay
- * per `:nth-child` slot and five is what it declares.
+ * The rotating phrases in the hero headline, held four times as long as the
+ * eyebrow's terms below, so the eyebrow reads as quick detail against a statement
+ * that stays put.
+ *
+ * The hold is deliberately generous — about nine seconds — because these
+ * characters are hoverable. Type that rotates faster than a reader can reach for
+ * it is type they cannot play with.
+ *
+ * Ordered rather than listed: the plainly descriptive one leads, because it is
+ * also the heading's accessible name, and the two sharper lines are kept apart so
+ * the rotation does not land two jokes in a row.
+ *
+ * Exactly six, matching the delay slots `landing.css` declares.
+ */
+const HERO_PHRASES = [
+  "Foundational security to support ambition",
+  "The template for modern builders",
+  "Vibes need security too",
+  "The foundation of your dreams",
+  "Your AI coding agent is not as good as you think",
+  "Your future starts here",
+] as const;
+
+/**
+ * The heading's stable accessible name. A heading that renamed itself every few
+ * seconds would be actively hostile to a screen reader, so the rotation is
+ * decorative and this is the one phrase that is actually announced — which is why
+ * the most descriptive line leads the list above.
+ */
+const HERO_HEADING = HERO_PHRASES[0];
+
+/**
+ * The rotating term in the hero eyebrow: what the foundation is built for, mixing
+ * the boundaries the thesis argues cannot be retrofitted with what they are
+ * ultimately in service of. Ending on "you" is the point of the sequence.
+ *
+ * Exactly ten, because `landing.css` assigns one delay per `:nth-child` slot and
+ * ten is what it declares. The two data terms sit far apart so the rotation never
+ * reads as a stutter.
  */
 const CYCLED_TERMS = [
   "authorization",
+  "agentic coding",
   "data ownership",
+  "scale",
   "audit trails",
+  "AI",
   "step-up MFA",
   "retry safety",
+  "data",
+  "you",
 ] as const;
 
 /** Counts that come from the repository contract, not from marketing. */
@@ -136,14 +178,27 @@ export default async function Home() {
             Padma
           </Link>
           <div className="flex items-center gap-2">
-            <Link href={REPOSITORY_URL} className="padma-cta padma-cta-primary">
+            <Link
+              href={REPOSITORY_URL}
+              {...buttonProps({
+                variant: "primary",
+                className: "padma-flair",
+              })}
+            >
               View on GitHub
             </Link>
             <Link
               href={primaryHref}
-              data-contrast-context="surface"
-              data-contrast-hover-context="raised"
-              className="padma-cta padma-cta-quiet hidden sm:inline-flex"
+              {...buttonProps({
+                variant: "secondary",
+                /*
+                 * `max-sm:hidden`, not `hidden sm:inline-flex`. Both of those set
+                 * `display` against the primitive's own `inline-flex`, and which
+                 * wins depends on stylesheet order; a single media-query utility
+                 * cannot be ambiguous.
+                 */
+                className: "padma-flair max-sm:hidden",
+              })}
             >
               {primaryLabel}
             </Link>
@@ -179,9 +234,15 @@ export default async function Home() {
             >
               <div>
                 <p className="padma-eyebrow padma-hero-aside">
+                  {/*
+                   * "Default deny", not "secure by default". The second is a
+                   * claim no engineer can honestly make about any codebase; the
+                   * first is invariant 1, is the title of foundation 01 below, and
+                   * is a thing this repository actually does and tests.
+                   */}
                   <span className="padma-live">
                     <span className="padma-live-dot" aria-hidden="true" />
-                    Secure by default
+                    Default deny
                   </span>
                   <span aria-hidden="true" className="opacity-45">
                     ·
@@ -196,9 +257,9 @@ export default async function Home() {
                 </p>
                 <h1
                   className="padma-headline mt-6 font-semibold tracking-[-0.045em]"
-                  aria-label={HERO_HEADLINE}
+                  aria-label={HERO_HEADING}
                 >
-                  <KineticText text={HERO_HEADLINE} />
+                  <KineticHeadline phrases={HERO_PHRASES} />
                 </h1>
                 <p className="padma-cue" aria-hidden="true">
                   <span className="padma-cue-track">
@@ -313,7 +374,11 @@ export default async function Home() {
           <div className="mt-14 flex flex-wrap items-center gap-6">
             <Link
               href={REPOSITORY_URL}
-              className="padma-cta padma-cta-primary padma-cta-lg"
+              {...buttonProps({
+                variant: "primary",
+                size: "lg",
+                className: "padma-flair",
+              })}
             >
               Use the GitHub template
             </Link>

@@ -119,6 +119,68 @@ Future work should preserve its personality, reduced-motion behavior, and
 performance, then carry the same level of polish into setup and the signed-in
 application.
 
+### Starter UI: one product, not a gallery of templates
+
+Padma will ship a coherent signed-in application rather than unrelated example
+pages. The core surface should include:
+
+- a useful dashboard;
+- onboarding;
+- profile, security, and session management;
+- members, invitations, roles, and permissions when the selected topology has
+  a team;
+- integrations and delivery health;
+- an activity/audit timeline;
+- account settings and consistent loading, empty, denied, not-found, and error
+  states.
+
+Reusable page blueprints will cover the patterns builders repeat most:
+collection/table, resource detail, create/edit form, settings section, import
+wizard, dashboard, activity timeline, and confirmation flow. These blueprints
+should be demonstrated in real pages, not only in the component workshop.
+
+Next.js filesystem routing remains the source of truth. Padma will not build a
+second router. Route groups and nested layouts will separate marketing, auth,
+and product surfaces. Typed routes will catch invalid links.
+
+Navigation will be centrally composable without becoming an authorization
+boundary. Features own typed navigation descriptors for label, destination,
+group, icon, permission, and supported topology; the application shell
+assembles them. Hiding a navigation item never replaces authorization in the
+page, service, or repository.
+
+The default signed-in shell will use:
+
+- a sidebar for primary product navigation;
+- a top utility bar for search, scope, notifications, and the user menu;
+- the same registry rendered as a mobile drawer;
+- local tabs or sub-navigation where a section needs them.
+
+Public pages keep a marketing header. Alternative shell treatments belong in
+the development workshop rather than appearing inconsistently across product
+pages.
+
+### Components are part of Padma's product value
+
+Padma will own the design language, component API, semantic tokens, and
+compositions that make the starter recognizable. Complex interactive behavior
+may use a proven headless foundation; custom design does not require
+reimplementing focus management or other accessibility machinery.
+
+Build the library in three layers:
+
+1. **UI primitives** — controls, dialog, menu, toast, tabs, feedback, loading,
+   and table foundations.
+2. **Product compositions** — application shell, navigation, page headers, data
+   tables, filters, pagination, statistics, forms, settings, imports, and
+   activity timelines.
+3. **Padma differentiators** — local persona and scope switching, permission
+   exploration, audit and delivery inspectors, and a permission-aware AI
+   command surface.
+
+The component workshop remains the isolated development surface. Actual starter
+pages prove that the components compose into a desirable product.
+
 ## Roadmap
 
 The phases are ordered. Adoption work runs alongside engineering rather than
@@ -163,10 +225,14 @@ feature in under ten minutes without external credentials.
 
 **Status: planned**
 
-- Create a polished responsive app shell and route-agnostic navigation.
+- Create the shared product layout, typed navigation registry, and polished
+  responsive app shell.
 - Finish the essential UI set: dialogs, toasts, loading states, tables,
   pagination, empty states, menus, and accessible form controls.
-- Add session management and the minimum user/role administration experience.
+- Replace the foundation-only dashboard with a useful product dashboard.
+- Add onboarding, profile, security, session management, and the minimum
+  user/role administration experience.
+- Add integrations, activity, and account-setting starter pages.
 - Add provider-neutral email and file-storage foundations.
 - Add health/readiness and a clear worker/scheduling path.
 - Resolve request idempotency before retry-prone paid operations depend on it.
@@ -184,7 +250,8 @@ without first constructing basic application infrastructure.
 - Support personal, single-organization, and multi-organization projects
   through the same service and repository contracts.
 - Make naming, branding, navigation, and feature selection setup concerns.
-- Publish the first removable product recipes.
+- Publish the first removable product recipe as a coherent CSV-to-pipeline
+  workflow rather than a collection of disconnected demo pages.
 
 Initial recipe targets reflect what people are commonly building:
 
@@ -254,6 +321,8 @@ Padma is ready for 1.0 when all of the following are true:
 - The production checklist clearly names external responsibilities.
 - At least one removable recipe demonstrates a complete, desirable workflow.
 - The landing page, setup flow, and signed-in shell feel like one product.
+- Starter pages use one navigation system and demonstrate the reusable page
+  blueprints in realistic states.
 - Agent evaluations exercise the security rules against unseen change prompts.
 - No known critical or high-severity defect remains open.
 

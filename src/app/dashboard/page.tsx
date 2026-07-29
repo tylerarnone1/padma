@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { TopNav } from "@/components/navigation/top-nav";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { getAccessSummary } from "@/features/access-control/data/authorization";
 import { AccountSecurity } from "@/features/auth/components/account-security";
@@ -70,9 +71,9 @@ export default async function DashboardPage() {
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
               <span>{session.user.email}</span>
               {developmentAuth && (
-                <span className="rounded-full border border-border px-2.5 py-1 font-mono">
+                <Badge variant="primary" className="font-mono">
                   Mock session
-                </span>
+                </Badge>
               )}
             </div>
           </div>

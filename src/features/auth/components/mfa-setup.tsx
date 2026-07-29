@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth/client";
 
@@ -132,22 +133,24 @@ export function MfaSetup({
 
       {(enabled || enrollment) && (
         <form onSubmit={verify} className="space-y-3">
-          <label htmlFor="totp-code" className="block text-sm font-medium">
-            {enrollment ? "3. Verify setup" : "Authenticator code"}
-          </label>
-          <Input
-            id="totp-code"
-            className="max-w-48 font-mono tracking-[0.25em]"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            minLength={6}
-            maxLength={8}
-            pattern="[0-9]+"
-            required
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            placeholder="000000"
-          />
+          <Field
+            label={enrollment ? "3. Verify setup" : "Authenticator code"}
+            description="Six digits from your authenticator app, or eight for a recovery code."
+          >
+            <Input
+              id="totp-code"
+              className="max-w-48 font-mono tracking-[0.25em]"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              minLength={6}
+              maxLength={8}
+              pattern="[0-9]+"
+              required
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder="000000"
+            />
+          </Field>
           <Button type="submit" disabled={pending}>
             {pending ? "Verifying…" : "Verify code"}
           </Button>
