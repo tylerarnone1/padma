@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: padma
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d padma"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - padma-data:/var/lib/postgresql/data
+
+volumes:
+  padma-data:

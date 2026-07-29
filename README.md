@@ -1,36 +1,193 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Padmav 0.1
 
-## Getting Started
+Padma is a secure-by-default Next.js starter built to stay legible while humans
+and coding agents extend it. It provides the difficult cross-cutting
+foundations without deciding what product you are building.
 
-First, run the development server:
+It ships with no organization, workspace, project, billing, or other borrowed
+SaaS domain. Your first feature defines your product.
+
+## What is included
+
+| Foundation | Implementation |
+| --- | --- |
+| Database | PostgreSQL 17, Prisma, committed migrations, idempotent seed |
+| Authentication | Passwordless GitHub and Google OAuth through Better Auth |
+| Local access | Guarded mock session so evaluation requires no OAuth setup |
+| MFA | TOTP enrollment and recent-verification checks for sensitive actions |
+| Authorization | Application-scoped `User → Role → Permission` RBAC |
+| Input security | Strict Zod schemas, body-size bounds, media-type and same-origin checks |
+| Sessions | Server-side validation, revocation, protected cookies, trusted-origin controls |
+| Integrations | Transactional outbox, provider ports, signed webhooks, SSRF checks, retries |
+| Observability | Structured redacted logging, request correlation, durable audit events |
+| UI | Atomic components, error boundaries, 401/403/404 pages |
+| Themes | Five source primitives, generated light/dark modes, palette preview, Contrast Guard |
+| AI guidance | Repository contract, feature generator, ADRs, security checklist, tests |
+
+## Quick start
+
+Requirements:
+
+- Node.js 22.12 or newer
+- Docker with Compose
 
 ```bash
+npm install
+copy .env.example .env
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`npm run dev` starts PostgreSQL on port `5433`, waits for it to become healthy,
+applies migrations, seeds the development identity and administrator role, then
+starts Next.js.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open [http://localhost:3000](http://localhost:3000). The default
+`AUTH_MODE="mock"` adds a development-only mock-account button to `/sign-in`.
+Choosing it creates an HTTP-only local session for the credential-free fixture
+in `src/mock-data/development-account.ts`. Mock mode only works with a
+development build and loopback `APP_URL`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000/components](http://localhost:3000/components) to
+preview and refine every stock UI primitive in a standardized, feature-neutral
+workshop.
 
-## Learn More
+Stop the database with:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run db:stop
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Build your first feature
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run generate:feature -- your-feature
+```
 
-## Deploy on Vercel
+Before implementation, complete the generated feature README:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Who owns each record?
+- How may a caller address it?
+- Which explicit permission protects each operation?
+- Which inputs cross a trust boundary?
+- What must be audited?
+- Which side effects need an outbox event?
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Padma does not answer those product questions with a hard-coded tenancy model.
+An app for one person, a public community, an internal tool, and a multi-tenant
+SaaS product need different ownership rules.
+
+## Authorization model
+
+Authentication establishes identity. It grants no product capability.
+
+Roles and permissions are global to this application:
+
+```text
+User ──< UserRole >── Role ──< RolePermission >── Permission
+```
+
+Canonical framework permissions use stable `resource:action` keys. The seed
+creates an `Administrator` role and gives it to the local mock user so the
+starter can be explored immediately. A real product should define how its first
+production administrator is bootstrapped.
+
+Feature data authorization is separate from RBAC. Each feature must enforce its
+own ownership or visibility policy in addition to checking a permission.
+
+## Protected mutation pattern
+
+```text
+request
+  → request ID and structured context
+  → same-origin check
+  → real server session
+  → recent MFA when sensitive
+  → strict, bounded input parsing
+  → explicit permission + feature ownership policy
+  → database transaction
+       ├─ domain write
+       ├─ audit event
+       └─ provider-neutral outbox event
+  → typed response or safe problem response
+```
+
+The browser is never the enforcement point. Server code rechecks the session,
+permission, ownership, and input at the operation boundary.
+
+## Integrations
+
+Features emit provider-neutral outbox events in the same transaction as domain
+state. Workers dispatch them through `IntegrationAdapter` ports. The included
+webhook adapter signs payloads, checks destinations against SSRF, records each
+delivery, applies bounded retries, and supports idempotent processing.
+
+This is the seam for broad automation platforms such as Zapier, Pipedream, or
+Nango. Product features remain independent of whichever provider is selected.
+
+Create a webhook through the protected application-level endpoint:
+
+```text
+POST /api/webhooks
+```
+
+The signing secret is returned once.
+
+## Real OAuth mode
+
+Set:
+
+```dotenv
+AUTH_MODE="oauth"
+GITHUB_CLIENT_ID="..."
+GITHUB_CLIENT_SECRET="..."
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
+```
+
+Configure either or both providers. Keep secrets out of source control and use a
+production secret manager outside local development.
+
+## Repository map
+
+```text
+src/
+├─ app/                 routes and composition
+├─ components/ui/       atomic, domain-neutral UI
+├─ features/
+│  ├─ access-control/   application RBAC policy and data access
+│  ├─ auth/             identity and account security
+│  └─ integrations/     outbox and provider ports
+├─ lib/                 shared infrastructure
+├─ mock-data/           local-only fixture identity
+└─ theme/               palettes, generation, and Contrast Guard
+prisma/                 schema, migration, and seed
+docs/                   architecture, security, and ADRs
+scripts/                dev orchestration, generators, workers
+```
+
+## Verification
+
+```bash
+npm run check
+npm run build
+```
+
+For schema work:
+
+```bash
+npm run db:generate
+npx prisma validate
+```
+
+Read [AGENTS.md](./AGENTS.md) before extending the starter. It is the executable
+contract for both coding agents and human contributors.
+
+## Security
+
+Read [docs/security.md](./docs/security.md) for the threat model and
+[SECURITY.md](./SECURITY.md) for vulnerability reporting. Never commit real
+credentials, tokens, production data, or copied provider payloads.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

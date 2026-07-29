@@ -12,6 +12,12 @@
 
 # testing
 /coverage
+/.tmp
+
+# local agent tooling
+/.agents/
+/.claude/
+/skills-lock.json
 
 # next.js
 /.next/
@@ -32,6 +38,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# generated database client
+/src/generated/prisma
 
 # vercel
 .vercel
