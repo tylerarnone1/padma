@@ -11,6 +11,7 @@ import {
   getServerEnvironment,
   getTrustedOrigins,
 } from "@/lib/env/server";
+import { recordMfaVerificationResult } from "@/lib/auth/recent-mfa-verification";
 import { logger } from "@/lib/logging/logger";
 
 const environment = getServerEnvironment();
@@ -33,12 +34,6 @@ const socialProviders = {
       }
     : {}),
 };
-
-const mfaVerificationPaths = new Set([
-  "/two-factor/verify-totp",
-  "/two-factor/verify-otp",
-  "/two-factor/verify-backup-code",
-]);
 
 export const auth = betterAuth({
   appName: environment.APP_NAME,
@@ -93,20 +88,13 @@ export const auth = betterAuth({
   },
   hooks: {
     after: createAuthMiddleware(async (context) => {
-      if (!mfaVerificationPaths.has(context.path)) {
-        return;
-      }
-
-      const sessionId =
-        context.context.newSession?.session.id ??
-        context.context.session?.session.id;
-
-      if (sessionId) {
-        await database.session.update({
-          where: { id: sessionId },
-          data: { mfaVerifiedAt: new Date() },
-        });
-      }
+      await recordMfaVerificationResult({
+        path: context.path,
+        returned: context.context.returned,
+        newSession: context.context.newSession,
+        session: context.context.session,
+        ...(context.headers ? { headers: context.headers } : {}),
+      });
     }),
   },
   plugins: [
@@ -125,7 +113,14 @@ export const auth = betterAuth({
     disabled: false,
     level: environment.NODE_ENV === "development" ? "debug" : "warn",
     log(level, message, ...args) {
-      logger[level]({ args }, message);
+      logger[level](
+        {
+          authArgumentTypes: args.map((argument) =>
+            argument instanceof Error ? argument.name : typeof argument,
+          ),
+        },
+        message,
+      );
     },
   },
 });

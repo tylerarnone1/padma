@@ -95,6 +95,7 @@ export async function requirePermission(input: {
       targetId: input.permission,
       outcome: "DENIED",
       requestId: requestContext?.requestId ?? null,
+      userAgent: requestContext?.userAgent ?? null,
     },
   });
 

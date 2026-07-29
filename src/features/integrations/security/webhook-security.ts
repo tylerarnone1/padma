@@ -2,53 +2,66 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 import { getServerEnvironment } from "@/lib/env/server";
 
-function isPrivateIpv4(address: string): boolean {
-  const octets = address.split(".").map(Number);
-  const [first, second] = octets;
-  if (first === undefined || second === undefined) return true;
+const nonPublicIpv4Addresses = new BlockList();
+const nonPublicIpv6Addresses = new BlockList();
 
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    first >= 224
-  );
+for (const [network, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const) {
+  nonPublicIpv4Addresses.addSubnet(network, prefix, "ipv4");
 }
 
-function isPrivateIpv6(address: string): boolean {
-  const normalized = address.toLowerCase();
-  return (
-    normalized === "::" ||
-    normalized === "::1" ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("fe8") ||
-    normalized.startsWith("fe9") ||
-    normalized.startsWith("fea") ||
-    normalized.startsWith("feb") ||
-    normalized.startsWith("::ffff:127.") ||
-    normalized.startsWith("::ffff:10.") ||
-    normalized.startsWith("::ffff:192.168.")
-  );
+for (const [network, prefix] of [
+  ["::", 128],
+  ["::1", 128],
+  ["::ffff:0:0", 96],
+  ["64:ff9b:1::", 48],
+  ["100::", 64],
+  ["2001::", 23],
+  ["2001:db8::", 32],
+  ["2002::", 16],
+  ["3fff::", 20],
+  ["fc00::", 7],
+  ["fe80::", 10],
+  ["ff00::", 8],
+] as const) {
+  nonPublicIpv6Addresses.addSubnet(network, prefix, "ipv6");
 }
 
 export function isPrivateAddress(address: string): boolean {
   const version = isIP(address);
-  if (version === 4) return isPrivateIpv4(address);
-  if (version === 6) return isPrivateIpv6(address);
+  if (version === 4) return nonPublicIpv4Addresses.check(address, "ipv4");
+  if (version === 6) return nonPublicIpv6Addresses.check(address, "ipv6");
   return true;
+}
+
+function hostnameWithoutBrackets(hostname: string): string {
+  return hostname.startsWith("[") && hostname.endsWith("]")
+    ? hostname.slice(1, -1)
+    : hostname;
 }
 
 export async function assertSafeWebhookUrl(value: string): Promise<URL> {
   const environment = getServerEnvironment();
   const url = new URL(value);
+  const hostname = hostnameWithoutBrackets(url.hostname);
 
   if (url.username || url.password) {
     throw new Error("Webhook URLs cannot contain credentials.");
@@ -57,7 +70,7 @@ export async function assertSafeWebhookUrl(value: string): Promise<URL> {
     const isLocalDevelopment =
       environment.NODE_ENV !== "production" &&
       url.protocol === "http:" &&
-      ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+      ["localhost", "127.0.0.1", "::1"].includes(hostname);
     if (!isLocalDevelopment) {
       throw new Error("Webhook URLs must use HTTPS.");
     }
@@ -65,12 +78,12 @@ export async function assertSafeWebhookUrl(value: string): Promise<URL> {
 
   if (
     environment.NODE_ENV !== "production" &&
-    ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+    ["localhost", "127.0.0.1", "::1"].includes(hostname)
   ) {
     return url;
   }
 
-  const addresses = await lookup(url.hostname, {
+  const addresses = await lookup(hostname, {
     all: true,
     verbatim: true,
   });

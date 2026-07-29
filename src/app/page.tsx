@@ -39,6 +39,7 @@ const foundations = [
 
 const HERO_HEADLINE = "Foundations open one layer at a time.";
 const CLOSING_HEADLINE = "Every layer, in one place";
+const REPOSITORY_URL = "https://github.com/tylerarnone1/padma";
 
 export default async function Home() {
   const session = await getCurrentSession();
@@ -52,14 +53,22 @@ export default async function Home() {
           <LotusMark className="size-8 text-primary" />
           Padma
         </Link>
-        <Link
-          href={primaryHref}
-          data-contrast-context="surface"
-          data-contrast-hover-context="raised"
-          className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold shadow-[var(--shadow-sm)] hover:bg-surface-raised"
-        >
-          {primaryLabel}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={REPOSITORY_URL}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-sm)] hover:bg-primary-hover"
+          >
+            View on GitHub
+          </Link>
+          <Link
+            href={primaryHref}
+            data-contrast-context="surface"
+            data-contrast-hover-context="raised"
+            className="hidden rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold shadow-[var(--shadow-sm)] hover:bg-surface-raised sm:inline-flex"
+          >
+            {primaryLabel}
+          </Link>
+        </div>
       </nav>
 
       {/*
@@ -168,12 +177,55 @@ export default async function Home() {
 
         <div className="mt-14 flex flex-wrap items-center gap-4">
           <Link
-            href={primaryHref}
+            href={REPOSITORY_URL}
             className="inline-flex min-h-11 items-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-sm)] hover:bg-primary-hover"
           >
-            {session ? "Continue building" : "Start securely"}
+            Use the GitHub template
           </Link>
-          <p className="text-sm text-muted">
+          <Link
+            href={primaryHref}
+            className="text-sm font-semibold text-muted hover:text-foreground"
+          >
+            {session ? "Continue building" : "Explore the local demo"} →
+          </Link>
+        </div>
+
+        <div
+          id="get-started"
+          className="mt-20 scroll-mt-8 border-t border-border pt-14"
+        >
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            Start building
+          </p>
+          <div className="mt-4 grid gap-8 lg:grid-cols-[1fr_1.2fr] lg:items-start">
+            <div>
+              <h2 className="text-3xl font-semibold tracking-tight">
+                Use this repository as a GitHub template.
+              </h2>
+              <p className="mt-4 max-w-xl leading-7 text-muted">
+                Clone your copy, start the guarded local environment, then
+                generate the first product feature. The repository contract
+                makes ownership, permissions, trust boundaries, audit, and
+                retries questions your coding agent must answer before it
+                writes the feature.
+              </p>
+            </div>
+            <div
+              data-contrast-context="raised"
+              className="overflow-x-auto rounded-xl border border-border bg-surface-raised p-5 font-mono text-sm leading-7 shadow-[var(--shadow-sm)]"
+            >
+              <code>
+                npm install
+                <br />
+                copy .env.example .env
+                <br />
+                npm run dev
+                <br />
+                npm run generate:feature -- your-feature
+              </code>
+            </div>
+          </div>
+          <p className="mt-8 text-sm text-muted">
             The motion on this page ships no client JavaScript.
           </p>
         </div>

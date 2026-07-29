@@ -2,11 +2,37 @@ import { ApplicationError } from "@/lib/http/errors";
 
 const DEFAULT_MAXIMUM_BODY_BYTES = 32 * 1024;
 
-export function assertSameOrigin(request: Request): void {
+function hostHeaderOrigin(request: Request): string | null {
+  const host = request.headers.get("host");
+  if (!host) return null;
+
+  try {
+    const requestUrl = new URL(request.url);
+    const hostUrl = new URL(`${requestUrl.protocol}//${host}`);
+    if (
+      hostUrl.username ||
+      hostUrl.password ||
+      hostUrl.pathname !== "/" ||
+      hostUrl.search ||
+      hostUrl.hash
+    ) {
+      return null;
+    }
+    return hostUrl.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function assertSameOrigin(request: Request): string {
   const origin = request.headers.get("origin");
   const requestOrigin = new URL(request.url).origin;
+  const acceptedOrigins = new Set([
+    requestOrigin,
+    hostHeaderOrigin(request),
+  ]);
 
-  if (!origin || origin !== requestOrigin) {
+  if (!origin || !acceptedOrigins.has(origin)) {
     throw new ApplicationError(
       "The request origin could not be verified.",
       403,
@@ -22,6 +48,8 @@ export function assertSameOrigin(request: Request): void {
       "cross_site_request",
     );
   }
+
+  return origin;
 }
 
 export async function readJsonBody(
@@ -29,7 +57,8 @@ export async function readJsonBody(
   maximumBytes = DEFAULT_MAXIMUM_BODY_BYTES,
 ): Promise<unknown> {
   const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().startsWith("application/json")) {
+  const mediaType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+  if (mediaType !== "application/json") {
     throw new ApplicationError(
       "Content-Type must be application/json.",
       415,
@@ -37,23 +66,54 @@ export async function readJsonBody(
     );
   }
 
-  const declaredLength = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
-    throw new ApplicationError(
-      "The request body is too large.",
-      413,
-      "payload_too_large",
-    );
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null) {
+    if (!/^\d+$/.test(contentLength)) {
+      throw new ApplicationError(
+        "Content-Length must be a non-negative integer.",
+        400,
+        "invalid_content_length",
+      );
+    }
+    if (Number(contentLength) > maximumBytes) {
+      throw new ApplicationError(
+        "The request body is too large.",
+        413,
+        "payload_too_large",
+      );
+    }
   }
 
-  const text = await request.text();
-  if (Buffer.byteLength(text, "utf8") > maximumBytes) {
-    throw new ApplicationError(
-      "The request body is too large.",
-      413,
-      "payload_too_large",
-    );
+  if (!request.body) {
+    return JSON.parse("");
   }
 
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let receivedBytes = 0;
+
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+
+      receivedBytes += result.value.byteLength;
+      if (receivedBytes > maximumBytes) {
+        await reader
+          .cancel("Request body exceeded the configured limit.")
+          .catch(() => undefined);
+        throw new ApplicationError(
+          "The request body is too large.",
+          413,
+          "payload_too_large",
+        );
+      }
+      chunks.push(result.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const text = Buffer.concat(chunks, receivedBytes).toString("utf8");
   return JSON.parse(text) as unknown;
 }

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { SignInForm } from "@/features/auth/components/sign-in-form";
-import { isDevelopmentAuthEnabled } from "@/lib/auth/auth-mode";
+import { isDevelopmentAuthRequestEnabled } from "@/lib/auth/auth-mode";
 import { getCurrentSession } from "@/lib/auth/session";
 import { getServerEnvironment } from "@/lib/env/server";
 
@@ -18,7 +19,10 @@ export default async function SignInPage() {
   }
 
   const environment = getServerEnvironment();
-  const developmentAuth = isDevelopmentAuthEnabled(environment);
+  const developmentAuth = isDevelopmentAuthRequestEnabled(
+    environment,
+    (await headers()).get("x-padma-request-host"),
+  );
 
   return (
     <main className="mx-auto flex min-h-[85vh] w-full max-w-md items-center px-6 py-16">

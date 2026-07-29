@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isDevelopmentAuthEnabled } from "./auth-mode";
+import {
+  isDevelopmentAuthEnabled,
+  isDevelopmentAuthRequestEnabled,
+} from "./auth-mode";
 
 describe("development authentication boundary", () => {
   it("enables the mock account only for a local development origin", () => {
@@ -34,4 +37,26 @@ describe("development authentication boundary", () => {
       expect(isDevelopmentAuthEnabled(environment)).toBe(false);
     },
   );
+
+  it("also requires the actual request hostname to be loopback", () => {
+    const environment = {
+      APP_URL: "http://localhost:3000",
+      AUTH_MODE: "mock",
+      NODE_ENV: "development",
+    } as const;
+
+    expect(
+      isDevelopmentAuthRequestEnabled(environment, "localhost"),
+    ).toBe(true);
+    expect(
+      isDevelopmentAuthRequestEnabled(environment, "127.0.0.1"),
+    ).toBe(true);
+    expect(
+      isDevelopmentAuthRequestEnabled(environment, "192.168.1.20"),
+    ).toBe(false);
+    expect(
+      isDevelopmentAuthRequestEnabled(environment, "preview.example"),
+    ).toBe(false);
+    expect(isDevelopmentAuthRequestEnabled(environment, null)).toBe(false);
+  });
 });

@@ -1,0 +1,15 @@
+---
+description: Canonical Padma architecture and security contract
+globs:
+alwaysApply: true
+---
+
+Read and follow @AGENTS.md completely before planning, editing, reviewing, or
+generating code. It is the canonical repository contract.
+
+Authentication never implies authorization. For every feature, explicitly
+define ownership, permissions, trust-boundary validation, recent MFA, audit and
+outbox behavior, idempotency, and tests proving default denial.
+
+Do not weaken AGENTS.md for convenience. Surface any conflict before changing
+code.

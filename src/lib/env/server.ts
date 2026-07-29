@@ -109,11 +109,20 @@ export function getServerEnvironment(): ServerEnvironment {
   return cachedEnvironment;
 }
 
+export function requireConfiguredAuthSecret(
+  configuredSecret: string | undefined,
+): string {
+  if (!configuredSecret) {
+    throw new Error(
+      "BETTER_AUTH_SECRET is missing. Start development through `npm run dev` or `npm run dev:next` so Padma can inject one process-wide secret.",
+    );
+  }
+  return configuredSecret;
+}
+
 export function getAuthSecret(): string {
-  const environment = getServerEnvironment();
-  return (
-    environment.BETTER_AUTH_SECRET ??
-    "development-only-secret-change-before-deploying"
+  return requireConfiguredAuthSecret(
+    getServerEnvironment().BETTER_AUTH_SECRET,
   );
 }
 

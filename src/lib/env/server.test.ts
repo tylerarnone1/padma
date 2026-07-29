@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseServerEnvironment } from "./server";
+import {
+  parseServerEnvironment,
+  requireConfiguredAuthSecret,
+} from "./server";
 
 describe("server environment", () => {
   it("treats blank optional values as unconfigured", () => {
@@ -32,5 +35,14 @@ describe("server environment", () => {
         INTEGRATION_ENCRYPTION_KEY: "",
       }),
     ).toThrow("BETTER_AUTH_SECRET is required in production");
+  });
+
+  it("does not invent a different authentication secret per server module", () => {
+    expect(() => requireConfiguredAuthSecret(undefined)).toThrow(
+      "BETTER_AUTH_SECRET is missing",
+    );
+    expect(requireConfiguredAuthSecret("configured-process-secret")).toBe(
+      "configured-process-secret",
+    );
   });
 });

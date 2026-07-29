@@ -2,7 +2,7 @@ import "server-only";
 
 import { headers } from "next/headers";
 import { auth, type AuthSession } from "@/lib/auth/auth";
-import { isDevelopmentAuthEnabled } from "@/lib/auth/auth-mode";
+import { isDevelopmentAuthRequestEnabled } from "@/lib/auth/auth-mode";
 import { hasValidDevelopmentSessionCookie } from "@/lib/auth/development-session-cookie";
 import { getDevelopmentSession } from "@/lib/auth/development-session";
 import { getAuthSecret, getServerEnvironment } from "@/lib/env/server";
@@ -16,7 +16,12 @@ export async function getCurrentSession(
 ): Promise<AuthSession | null> {
   const resolvedHeaders = requestHeaders ?? (await headers());
 
-  if (isDevelopmentAuthEnabled(getServerEnvironment())) {
+  if (
+    isDevelopmentAuthRequestEnabled(
+      getServerEnvironment(),
+      resolvedHeaders.get("x-padma-request-host"),
+    )
+  ) {
     if (
       !hasValidDevelopmentSessionCookie(resolvedHeaders, getAuthSecret())
     ) {
@@ -46,22 +51,31 @@ export function hasRecentMfa(
   maximumAgeMs = 15 * 60 * 1000,
 ): boolean {
   if (!session.user.twoFactorEnabled) {
-    return true;
+    return false;
   }
 
   const verifiedAt = session.session.mfaVerifiedAt;
-  return (
-    verifiedAt instanceof Date &&
-    Date.now() - verifiedAt.getTime() <= maximumAgeMs
-  );
+  if (!(verifiedAt instanceof Date)) return false;
+
+  const ageMs = Date.now() - verifiedAt.getTime();
+  return ageMs >= -30_000 && ageMs <= maximumAgeMs;
+}
+
+export function assertRecentMfa(session: AuthSession): void {
+  if (!session.user.twoFactorEnabled) {
+    throw new ForbiddenError(
+      "Multi-factor authentication must be configured for this action.",
+    );
+  }
+  if (!hasRecentMfa(session)) {
+    throw new ForbiddenError("Recent multi-factor verification is required.");
+  }
 }
 
 export async function requireRecentMfa(
   requestHeaders?: Headers,
 ): Promise<AuthSession> {
   const session = await requireSession(requestHeaders);
-  if (!hasRecentMfa(session)) {
-    throw new ForbiddenError("Recent multi-factor verification is required.");
-  }
+  assertRecentMfa(session);
   return session;
 }

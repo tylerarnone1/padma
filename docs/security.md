@@ -30,6 +30,14 @@ authorization occur where each value crosses into trusted server code.
 | Duplicate delivery | Idempotency keys and unique delivery records |
 | Retry storms | Bounded exponential retry and terminal failure state |
 
+Recent MFA is an enforced step-up boundary. A user without an enrolled factor
+does not satisfy it, and a failed verification never advances the session's
+verification timestamp.
+
+Mock authentication is bound to loopback at the process, configured-origin,
+request-host, and cookie-validation layers. It must not be exposed through a
+development tunnel or shared container port.
+
 ## Product ownership is explicit
 
 Padma does not ship a universal data-ownership model. Every feature must document
@@ -46,3 +54,5 @@ compound constraints, query policy, and isolation tests deliberately.
 - Monitor audit denials, authentication anomalies, and exhausted deliveries.
 - Define backup, restore, retention, and privacy-erasure procedures.
 - Review provider scopes and production bootstrap of administrator access.
+
+Use [production-checklist.md](./production-checklist.md) before deployment.

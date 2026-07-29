@@ -22,6 +22,7 @@ enum OutboxStatus {
 
 enum WebhookDeliveryStatus {
   PENDING
+  PROCESSING
   DELIVERED
   RETRYING
   FAILED
@@ -226,6 +227,7 @@ model WebhookDelivery {
   responseStatus Int?
   responseBody   String?
   nextAttemptAt  DateTime?
+  lockedAt       DateTime?
   deliveredAt    DateTime?
   lastError      String?
   createdAt      DateTime              @default(now())

@@ -15,9 +15,9 @@ export async function createWebhookEndpoint(input: {
   let url: URL;
   try {
     url = await assertSafeWebhookUrl(input.webhook.url);
-  } catch (error) {
+  } catch {
     throw new ValidationError(
-      error instanceof Error ? error.message : "The webhook URL is not safe.",
+      "The webhook URL is not allowed.",
       { url: ["The webhook URL is not allowed."] },
     );
   }
@@ -51,6 +51,7 @@ export async function createWebhookEndpoint(input: {
         targetId: created.id,
         outcome: "SUCCESS",
         requestId: context?.requestId ?? null,
+        userAgent: context?.userAgent ?? null,
       },
     });
 

@@ -143,8 +143,10 @@ security regression. A happy-path UI test is not an authorization test.
 - `npm run dev` starts Compose PostgreSQL, waits for health, applies committed
   migrations, seeds local fixtures, and launches Next.js.
 - PostgreSQL uses host port `5433` by default to avoid an unrelated local
-  instance on `5432`.
+  instance on `5432`, and Compose binds it to `127.0.0.1` only.
 - `scripts/dev.ts` pins child processes to the container it started.
+- The Next.js development server binds to `127.0.0.1`; do not expose mock
+  authentication through LAN bindings or public tunnels.
 - Never add a destructive reset to startup. Preserve existing volumes unless
   the user explicitly requests deletion.
 

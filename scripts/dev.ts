@@ -1,14 +1,19 @@
 import "dotenv/config";
 
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import process from "node:process";
 
 const DEFAULT_POSTGRES_PORT = 5433;
 const prepareOnly = process.argv.includes("--prepare-only");
+const nextOnly = process.argv.includes("--next-only");
 const nextArguments = process.argv
   .slice(2)
-  .filter((argument) => argument !== "--prepare-only");
+  .filter(
+    (argument) =>
+      argument !== "--prepare-only" && argument !== "--next-only",
+  );
 
 function developmentPostgresPort(value: string | undefined): number {
   const port = value ? Number(value) : DEFAULT_POSTGRES_PORT;
@@ -49,6 +54,10 @@ function run(
 }
 
 async function main(): Promise<void> {
+  if (prepareOnly && nextOnly) {
+    throw new Error("--prepare-only and --next-only cannot be combined.");
+  }
+
   const postgresPort = developmentPostgresPort(process.env.POSTGRES_PORT);
   const databaseUrl =
     `postgresql://postgres:postgres@127.0.0.1:${postgresPort}` +
@@ -57,6 +66,9 @@ async function main(): Promise<void> {
     ...process.env,
     POSTGRES_PORT: String(postgresPort),
     DATABASE_URL: databaseUrl,
+    BETTER_AUTH_SECRET:
+      process.env.BETTER_AUTH_SECRET?.trim() ||
+      randomBytes(32).toString("base64url"),
   };
   const prismaCli = path.resolve(
     "node_modules",
@@ -66,20 +78,22 @@ async function main(): Promise<void> {
   );
   const tsxCli = path.resolve("node_modules", "tsx", "dist", "cli.mjs");
 
-  console.log(
-    `Starting the isolated Padma PostgreSQL service on port ${postgresPort}…`,
-  );
-  await run(
-    "docker",
-    ["compose", "up", "-d", "--wait", "postgres"],
-    environment,
-  );
+  if (!nextOnly) {
+    console.log(
+      `Starting the isolated Padma PostgreSQL service on port ${postgresPort}…`,
+    );
+    await run(
+      "docker",
+      ["compose", "up", "-d", "--wait", "postgres"],
+      environment,
+    );
 
-  console.log("Applying committed database migrations…");
-  await run(process.execPath, [prismaCli, "migrate", "deploy"], environment);
+    console.log("Applying committed database migrations…");
+    await run(process.execPath, [prismaCli, "migrate", "deploy"], environment);
 
-  console.log("Seeding permissions and development fixtures…");
-  await run(process.execPath, [tsxCli, "prisma/seed.ts"], environment);
+    console.log("Seeding permissions and development fixtures…");
+    await run(process.execPath, [tsxCli, "prisma/seed.ts"], environment);
+  }
 
   if (prepareOnly) {
     console.log("Padma development services are ready.");
@@ -94,6 +108,8 @@ async function main(): Promise<void> {
       path.resolve("node_modules", "next", "dist", "bin", "next"),
       "dev",
       ...nextArguments,
+      "--hostname",
+      "127.0.0.1",
     ],
     environment,
   );

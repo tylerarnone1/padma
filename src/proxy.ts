@@ -1,31 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
-
-function createContentSecurityPolicy(nonce: string): string {
-  const isDevelopment = process.env.NODE_ENV === "development";
-  return [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
-    `style-src 'self' 'nonce-${nonce}'${isDevelopment ? " 'unsafe-inline'" : ""}`,
-    "img-src 'self' blob: data:",
-    "font-src 'self'",
-    "connect-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    "worker-src 'self' blob:",
-    ...(isDevelopment ? [] : ["upgrade-insecure-requests"]),
-  ].join("; ");
-}
+import { createContentSecurityPolicy } from "@/lib/http/content-security-policy";
 
 export function proxy(request: NextRequest): NextResponse {
   const requestId = crypto.randomUUID();
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const contentSecurityPolicy = createContentSecurityPolicy(nonce);
+  const contentSecurityPolicy = createContentSecurityPolicy(
+    nonce,
+    process.env.NODE_ENV === "development" ? "development" : "production",
+  );
   const requestHeaders = new Headers(request.headers);
 
   requestHeaders.set("x-request-id", requestId);
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("x-padma-request-host", request.nextUrl.hostname);
   requestHeaders.set("content-security-policy", contentSecurityPolicy);
 
   const response = NextResponse.next({

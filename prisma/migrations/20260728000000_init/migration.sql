@@ -8,7 +8,7 @@ CREATE TYPE "AuditOutcome" AS ENUM ('SUCCESS', 'DENIED', 'FAILURE');
 CREATE TYPE "OutboxStatus" AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
 
 -- CreateEnum
-CREATE TYPE "WebhookDeliveryStatus" AS ENUM ('PENDING', 'DELIVERED', 'RETRYING', 'FAILED');
+CREATE TYPE "WebhookDeliveryStatus" AS ENUM ('PENDING', 'PROCESSING', 'DELIVERED', 'RETRYING', 'FAILED');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -192,6 +192,7 @@ CREATE TABLE "webhook_deliveries" (
     "responseStatus" INTEGER,
     "responseBody" TEXT,
     "nextAttemptAt" TIMESTAMP(3),
+    "lockedAt" TIMESTAMP(3),
     "deliveredAt" TIMESTAMP(3),
     "lastError" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

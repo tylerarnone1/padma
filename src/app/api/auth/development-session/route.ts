@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isDevelopmentAuthEnabled } from "@/lib/auth/auth-mode";
+import { isDevelopmentAuthRequestEnabled } from "@/lib/auth/auth-mode";
 import {
   createDevelopmentSessionToken,
   DEVELOPMENT_SESSION_COOKIE,
@@ -16,8 +16,13 @@ import {
 
 const DEVELOPMENT_SESSION_SECONDS = 8 * 60 * 60;
 
-function requireDevelopmentAuth(): void {
-  if (!isDevelopmentAuthEnabled(getServerEnvironment())) {
+function requireDevelopmentAuth(request: Request): void {
+  if (
+    !isDevelopmentAuthRequestEnabled(
+      getServerEnvironment(),
+      new URL(request.url).hostname,
+    )
+  ) {
     throw new NotFoundError("Development authentication");
   }
 }
@@ -27,12 +32,12 @@ export async function POST(request: Request): Promise<Response> {
 
   return runWithRequestContext({ requestId }, async () => {
     try {
-      assertSameOrigin(request);
-      requireDevelopmentAuth();
+      const requestOrigin = assertSameOrigin(request);
+      requireDevelopmentAuth(request);
       await getDevelopmentSession();
 
       const response = NextResponse.redirect(
-        new URL("/dashboard", request.url),
+        new URL("/dashboard", requestOrigin),
         303,
       );
       response.cookies.set({
@@ -60,7 +65,7 @@ export async function DELETE(request: Request): Promise<Response> {
   return runWithRequestContext({ requestId }, async () => {
     try {
       assertSameOrigin(request);
-      requireDevelopmentAuth();
+      requireDevelopmentAuth(request);
 
       const response = new NextResponse(null, {
         status: 204,

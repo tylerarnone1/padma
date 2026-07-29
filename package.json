@@ -3,13 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "description": "A secure-by-default, AI-legible Next.js foundation.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tylerarnone1/padma.git"
+  },
   "engines": {
     "node": ">=22.12"
   },
   "scripts": {
     "dev": "tsx scripts/dev.ts",
     "dev:prepare": "tsx scripts/dev.ts --prepare-only",
-    "dev:next": "next dev",
+    "dev:next": "tsx scripts/dev.ts --next-only",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -17,7 +21,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm run test",
+    "check": "npm run typecheck && npm run lint && npm run test:coverage",
     "generate:feature": "tsx scripts/create-feature.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

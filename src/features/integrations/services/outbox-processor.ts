@@ -2,6 +2,7 @@ import "server-only";
 
 import { WebhookAdapter } from "@/features/integrations/adapters/webhook-adapter";
 import type { IntegrationAdapter } from "@/features/integrations/contracts/integration-adapter";
+import { parseDatabaseIntegrationEvent } from "@/features/integrations/schemas/integration-event-schema";
 import {
   assertSafeWebhookUrl,
   signWebhook,
@@ -12,13 +13,24 @@ import { logger } from "@/lib/logging/logger";
 
 const adapters: IntegrationAdapter[] = [new WebhookAdapter()];
 const MAXIMUM_ATTEMPTS = 8;
+const PROCESSING_LEASE_MS = 5 * 60 * 1000;
 
 export async function processOutboxBatch(limit = 25): Promise<number> {
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - PROCESSING_LEASE_MS);
   const candidates = await database.outboxEvent.findMany({
     where: {
-      status: { in: ["PENDING", "FAILED"] },
-      availableAt: { lte: new Date() },
       attemptCount: { lt: MAXIMUM_ATTEMPTS },
+      OR: [
+        {
+          status: { in: ["PENDING", "FAILED"] },
+          availableAt: { lte: now },
+        },
+        {
+          status: "PROCESSING",
+          lockedAt: { lte: staleBefore },
+        },
+      ],
     },
     orderBy: { createdAt: "asc" },
     take: limit,
@@ -34,7 +46,7 @@ export async function processOutboxBatch(limit = 25): Promise<number> {
       },
       data: {
         status: "PROCESSING",
-        lockedAt: new Date(),
+        lockedAt: now,
         attemptCount: { increment: 1 },
       },
     });
@@ -43,14 +55,16 @@ export async function processOutboxBatch(limit = 25): Promise<number> {
     try {
       await Promise.all(
         adapters.map((adapter) =>
-          adapter.dispatch({
-            id: event.id,
-            topic: event.topic,
-            aggregateType: event.aggregateType,
-            aggregateId: event.aggregateId,
-            payload: event.payload,
-            occurredAt: event.createdAt,
-          }),
+          adapter.dispatch(
+            parseDatabaseIntegrationEvent({
+              id: event.id,
+              topic: event.topic,
+              aggregateType: event.aggregateType,
+              aggregateId: event.aggregateId,
+              payload: event.payload,
+              occurredAt: event.createdAt,
+            }),
+          ),
         ),
       );
       await database.outboxEvent.update({
@@ -84,11 +98,21 @@ export async function processOutboxBatch(limit = 25): Promise<number> {
 }
 
 export async function processWebhookDeliveryBatch(limit = 25): Promise<number> {
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - PROCESSING_LEASE_MS);
   const candidates = await database.webhookDelivery.findMany({
     where: {
-      status: { in: ["PENDING", "RETRYING"] },
       attemptCount: { lt: MAXIMUM_ATTEMPTS },
-      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: new Date() } }],
+      OR: [
+        {
+          status: { in: ["PENDING", "RETRYING"] },
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+        },
+        {
+          status: "PROCESSING",
+          lockedAt: { lte: staleBefore },
+        },
+      ],
     },
     orderBy: { createdAt: "asc" },
     take: limit,
@@ -107,7 +131,8 @@ export async function processWebhookDeliveryBatch(limit = 25): Promise<number> {
         attemptCount: delivery.attemptCount,
       },
       data: {
-        status: "RETRYING",
+        status: "PROCESSING",
+        lockedAt: now,
         attemptCount: { increment: 1 },
       },
     });
@@ -154,6 +179,7 @@ export async function processWebhookDeliveryBatch(limit = 25): Promise<number> {
           responseStatus: response.status,
           deliveredAt: new Date(),
           nextAttemptAt: null,
+          lockedAt: null,
           lastError: null,
         },
       });
@@ -165,6 +191,7 @@ export async function processWebhookDeliveryBatch(limit = 25): Promise<number> {
         where: { id: delivery.id },
         data: {
           status: exhausted ? "FAILED" : "RETRYING",
+          lockedAt: null,
           nextAttemptAt: exhausted
             ? null
             : new Date(

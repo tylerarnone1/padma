@@ -25,6 +25,8 @@ Describe the user outcome and domain vocabulary.
 - State who owns each record and how callers may address it.
 - State the permission required by each operation.
 - State security-sensitive side effects and audit events.
+- State retry, duplicate, idempotency, and worker-crash behavior.
+- List the negative tests that prove default denial and ownership isolation.
 
 ## Public surface
 

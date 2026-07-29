@@ -1,5 +1,11 @@
 # Security policy
 
+## Supported versions
+
+Until the first stable release, security fixes are applied to the latest
+published `0.x` release and the default branch. Upgrade to the newest patch
+before reporting an issue that may already be resolved.
+
 ## Reporting a vulnerability
 
 Please do not open a public issue.

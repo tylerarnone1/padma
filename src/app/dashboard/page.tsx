@@ -6,7 +6,7 @@ import { getAccessSummary } from "@/features/access-control/data/authorization";
 import { AccountSecurity } from "@/features/auth/components/account-security";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 import { isDevelopmentAuthEnabled } from "@/lib/auth/auth-mode";
-import { getCurrentSession, hasRecentMfa } from "@/lib/auth/session";
+import { getCurrentSession } from "@/lib/auth/session";
 import { getServerEnvironment } from "@/lib/env/server";
 
 export const metadata: Metadata = {
@@ -40,9 +40,6 @@ export default async function DashboardPage() {
   const session = await getCurrentSession();
   if (!session) {
     redirect("/sign-in");
-  }
-  if (!hasRecentMfa(session)) {
-    redirect("/auth/mfa");
   }
 
   const developmentAuth = isDevelopmentAuthEnabled(getServerEnvironment());

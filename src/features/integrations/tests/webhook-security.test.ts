@@ -45,8 +45,17 @@ describe("private network classification", () => {
     "172.16.0.1",
     "192.168.1.1",
     "169.254.169.254",
+    "192.0.2.1",
+    "198.51.100.10",
+    "203.0.113.10",
+    "224.0.0.1",
     "::1",
     "fd00::1",
+    "fe80::1",
+    "ff02::1",
+    "::ffff:172.16.0.1",
+    "::ffff:169.254.169.254",
+    "::ffff:8.8.8.8",
   ])("blocks %s", (address) => {
     expect(isPrivateAddress(address)).toBe(true);
   });

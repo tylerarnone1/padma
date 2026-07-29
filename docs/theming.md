@@ -96,6 +96,11 @@ two elements use narrowly scoped hydration-warning suppression. This does not
 remove or weaken the nonce; it prevents React from reporting the browser's
 required nonce-hiding behavior as an application mismatch.
 
+Development uses Next.js's documented CSP accommodations: inline styles and
+data-backed development fonts are allowed so the development runtime and
+tooling can operate. Production does not inherit those allowances; generated
+styles remain nonce-protected and fonts remain same-origin.
+
 ## Why a small stylesheet remains
 
 `globals.css` is deliberately limited to Tailwind's generated utilities and

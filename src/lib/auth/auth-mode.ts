@@ -8,7 +8,11 @@ type AuthModeEnvironment = {
   NODE_ENV: "development" | "test" | "production";
 };
 
-const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+export function isLoopbackHostname(hostname: string | null): boolean {
+  return hostname !== null && loopbackHosts.has(hostname.toLowerCase());
+}
 
 /**
  * Mock authentication needs three independent development signals. This keeps
@@ -25,5 +29,15 @@ export function isDevelopmentAuthEnabled(
     return false;
   }
 
-  return loopbackHosts.has(new URL(environment.APP_URL).hostname);
+  return isLoopbackHostname(new URL(environment.APP_URL).hostname);
+}
+
+export function isDevelopmentAuthRequestEnabled(
+  environment: AuthModeEnvironment,
+  requestHostname: string | null,
+): boolean {
+  return (
+    isDevelopmentAuthEnabled(environment) &&
+    isLoopbackHostname(requestHostname)
+  );
 }

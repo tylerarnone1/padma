@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   hasDevelopmentCookie: vi.fn(),
   getAuthSecret: vi.fn(() => "test-auth-secret"),
   getEnvironment: vi.fn(),
-  requestHeaders: new Headers({ "x-test": "session" }),
+  requestHeaders: new Headers({
+    "x-test": "session",
+    "x-padma-request-host": "localhost",
+  }),
 }));
 
 vi.mock("@/lib/auth/auth", () => ({
@@ -34,7 +37,11 @@ vi.mock("next/headers", () => ({
   headers: vi.fn(async () => mocks.requestHeaders),
 }));
 
-import { getCurrentSession } from "./session";
+import {
+  assertRecentMfa,
+  getCurrentSession,
+  hasRecentMfa,
+} from "./session";
 
 describe("session adapter", () => {
   beforeEach(() => {
@@ -90,5 +97,73 @@ describe("session adapter", () => {
     });
     expect(mocks.hasDevelopmentCookie).not.toHaveBeenCalled();
     expect(mocks.developmentGetSession).not.toHaveBeenCalled();
+  });
+
+  it("does not honor the development cookie on a non-loopback request", async () => {
+    mocks.getEnvironment.mockReturnValue({
+      APP_URL: "http://localhost:3000",
+      AUTH_MODE: "mock",
+      NODE_ENV: "development",
+    });
+    mocks.authGetSession.mockResolvedValue(null);
+    const remoteHeaders = new Headers({
+      cookie: "padma.development-session=valid-looking-cookie",
+      "x-padma-request-host": "192.168.1.20",
+    });
+
+    await expect(getCurrentSession(remoteHeaders)).resolves.toBeNull();
+    expect(mocks.hasDevelopmentCookie).not.toHaveBeenCalled();
+    expect(mocks.developmentGetSession).not.toHaveBeenCalled();
+    expect(mocks.authGetSession).toHaveBeenCalledWith({
+      headers: remoteHeaders,
+    });
+  });
+});
+
+describe("recent MFA policy", () => {
+  function session(input: {
+    enabled: boolean;
+    verifiedAt: Date | null;
+  }): Parameters<typeof hasRecentMfa>[0] {
+    return {
+      user: {
+        twoFactorEnabled: input.enabled,
+      },
+      session: {
+        mfaVerifiedAt: input.verifiedAt,
+      },
+    } as Parameters<typeof hasRecentMfa>[0];
+  }
+
+  it("requires enrollment instead of treating a missing factor as verified", () => {
+    const unenrolled = session({ enabled: false, verifiedAt: null });
+
+    expect(hasRecentMfa(unenrolled)).toBe(false);
+    expect(() => assertRecentMfa(unenrolled)).toThrow(
+      "Multi-factor authentication must be configured",
+    );
+  });
+
+  it("accepts only a recent verification timestamp", () => {
+    const recent = session({
+      enabled: true,
+      verifiedAt: new Date(Date.now() - 60_000),
+    });
+    const stale = session({
+      enabled: true,
+      verifiedAt: new Date(Date.now() - 16 * 60_000),
+    });
+    const implausiblyFuture = session({
+      enabled: true,
+      verifiedAt: new Date(Date.now() + 5 * 60_000),
+    });
+
+    expect(hasRecentMfa(recent)).toBe(true);
+    expect(() => assertRecentMfa(recent)).not.toThrow();
+    expect(hasRecentMfa(stale)).toBe(false);
+    expect(() => assertRecentMfa(stale)).toThrow(
+      "Recent multi-factor verification is required",
+    );
+    expect(hasRecentMfa(implausiblyFuture)).toBe(false);
   });
 });

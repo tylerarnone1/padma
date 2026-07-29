@@ -14,6 +14,8 @@ Before writing implementation, answer in the generated README:
 4. Which fields are caller-controlled?
 5. Which actions require recent MFA or an audit event?
 6. Which side effects require an outbox event?
+7. What happens after a crash, retry, or duplicate request?
+8. Which denial and failure outcomes require a durable audit event?
 
 Keep UI in `components`, Prisma access in `data` or `services`, pure decisions in
 `policies`, strict boundary parsing in `schemas`, and regression tests in
@@ -31,6 +33,7 @@ At minimum, tests should prove:
 - unknown or oversized input is rejected;
 - duplicate delivery or retry cannot duplicate state;
 - sensitive values do not appear in responses or logs.
+- a worker crash cannot strand work forever or cause concurrent delivery.
 
 Do not introduce organizations, workspaces, or another ownership hierarchy
 unless the product feature genuinely requires it.
