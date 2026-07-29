@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { LotusMark } from "@/components/ui/lotus-mark";
 import { Select } from "@/components/ui/select";
@@ -62,7 +63,10 @@ export default async function ComponentsPage() {
         current="components"
       />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 pb-24 sm:px-10">
+      <main
+        id="main-content"
+        className="mx-auto w-full max-w-6xl flex-1 px-6 pb-24 sm:px-10"
+      >
         <header className="py-16 sm:py-20">
           <div className="flex items-center gap-3">
             <LotusMark className="size-8 text-primary" />
@@ -170,51 +174,42 @@ export default async function ComponentsPage() {
             data-contrast-context="surface"
             className="grid gap-6 rounded-[var(--radius-lg)] border border-border bg-surface p-6 sm:grid-cols-2 sm:p-8"
           >
-            <label className="block text-sm font-medium">
-              Display name
-              <Input className="mt-2" placeholder="Ada Lovelace" />
-              <span className="mt-1.5 block text-xs font-normal text-muted">
-                This is shown wherever your profile is visible.
-              </span>
-            </label>
+            <Field
+              label="Display name"
+              description="This is shown wherever your profile is visible."
+            >
+              <Input placeholder="Ada Lovelace" />
+            </Field>
 
-            <label className="block text-sm font-medium">
-              Role
-              <Select className="mt-2" defaultValue="editor">
+            <Field label="Role">
+              <Select defaultValue="editor">
                 <option value="viewer">Viewer</option>
                 <option value="editor">Editor</option>
                 <option value="administrator">Administrator</option>
               </Select>
-            </label>
+            </Field>
 
-            <label className="block text-sm font-medium sm:col-span-2">
-              Description
+            <Field label="Description" className="sm:col-span-2">
               <Textarea
-                className="mt-2"
                 placeholder="Add a short, useful description."
               />
-            </label>
+            </Field>
 
-            <label className="block text-sm font-medium">
-              Validation state
+            <Field
+              label="Validation state"
+              error="Enter a valid email address."
+            >
               <Input
-                className="mt-2"
                 defaultValue="not-an-email"
-                aria-invalid="true"
               />
-              <span className="mt-1.5 block text-xs font-normal text-danger">
-                Enter a valid email address.
-              </span>
-            </label>
+            </Field>
 
-            <label className="block text-sm font-medium">
-              Disabled state
+            <Field label="Disabled state">
               <Input
-                className="mt-2"
                 defaultValue="System managed"
                 disabled
               />
-            </label>
+            </Field>
 
             <div className="flex flex-wrap gap-x-6 gap-y-3 sm:col-span-2">
               <label className="inline-flex items-center gap-2 text-sm">

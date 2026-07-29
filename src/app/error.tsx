@@ -20,7 +20,10 @@ export default function ErrorBoundary({
   }, [error]);
 
   return (
-    <main className="mx-auto flex min-h-[75vh] w-full max-w-2xl items-center px-6 py-20">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-[75vh] w-full max-w-2xl items-center px-6 py-20"
+    >
       <Card
         role="alert"
         aria-labelledby="application-error-title"

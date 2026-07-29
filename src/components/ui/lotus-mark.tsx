@@ -5,6 +5,12 @@
  * same construction the animated bloom uses in three dimensions. It paints with
  * `currentColor` only, so every palette and color mode gets a correct mark
  * without the component knowing any palette values.
+ *
+ * The rotations are `transform` presentation attributes, so the mark is correct
+ * with no stylesheet at all. `landing.css` opens the fan wider when the mark sits
+ * inside a hovered `.padma-brand` link, which works because a CSS `transform`
+ * outranks the attribute — each petal is simply re-declared at a new angle. The
+ * `data-petal` index is what lets it address them individually.
  */
 
 const PETAL_PATH = "M16 6C19.6 11.6 19.6 18.4 16 24C12.4 18.4 12.4 11.6 16 6Z";
@@ -25,13 +31,14 @@ export function LotusMark({ className = "" }: { className?: string }) {
       viewBox="0 0 32 32"
       role="img"
       aria-label="Padma"
-      className={className}
+      className={`padma-mark ${className}`}
     >
       <g fill="currentColor">
-        {PETALS.map((petal) => (
+        {PETALS.map((petal, index) => (
           <path
             key={petal.angle}
             d={PETAL_PATH}
+            data-petal={index}
             opacity={petal.opacity}
             transform={
               petal.angle === 0 ? undefined : `rotate(${petal.angle} ${HINGE})`

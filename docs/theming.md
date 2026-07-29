@@ -108,6 +108,16 @@ browser-level selectors such as focus, selection, transitions, and the page
 background. Responsive breakpoints, hover states, and pseudo-elements belong in
 a stylesheet because React inline styles cannot express them.
 
+`landing.css` is the second and last global stylesheet: the marketing page's
+motion system. It is separate because it is large, because none of it applies
+anywhere else, and because neither file has to be read to understand the other.
+Both are imported from `layout.tsx` rather than chained with a CSS `@import`, so
+the bundler resolves them and `landing.css` lands after the base rules in the
+cascade. It exists as a stylesheet for the same reason the rest of this page
+does: its per-element indices — petal, character, word, mote, beat — are derived
+from `:nth-child`, because passing them as inline `style` props is exactly what
+the production CSP forbids.
+
 The theme values themselves are emitted from TypeScript in a nonce-protected
 `style` element. Using arbitrary inline `style` attributes would require
 weakening the production Content Security Policy with `style-src-attr

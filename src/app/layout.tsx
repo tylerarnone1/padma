@@ -3,6 +3,14 @@ import { headers } from "next/headers";
 import { ThemeHead } from "@/theme/theme";
 import { ThemeControls } from "@/theme/theme-controls";
 import "./globals.css";
+/*
+ * The landing page's motion system: a large, self-contained stylesheet kept
+ * apart from the base rules so neither has to be read to understand the other.
+ * Imported here rather than with a CSS `@import` inside `globals.css` so the
+ * bundler resolves it, and imported second so its rules sit after the base
+ * element styles in the cascade.
+ */
+import "./landing.css";
 
 export const metadata: Metadata = {
   title: {
@@ -32,8 +40,15 @@ export default async function RootLayout({
         <ThemeHead nonce={nonce} />
       </head>
       <body className="flex min-h-full flex-col">
+        <a
+          href="#main-content"
+          data-contrast-context="raised"
+          className="fixed left-4 top-4 z-50 -translate-y-24 rounded-[var(--radius-sm)] border border-border bg-surface-raised px-4 py-2 text-sm font-semibold shadow-[var(--shadow-md)] focus:translate-y-0"
+        >
+          Skip to main content
+        </a>
         {children}
-        <ThemeControls />
+        {process.env.NODE_ENV !== "production" ? <ThemeControls /> : null}
       </body>
     </html>
   );

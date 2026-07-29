@@ -58,7 +58,10 @@ export default async function DashboardPage() {
         }
       />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 pb-8 sm:px-10">
+      <main
+        id="main-content"
+        className="mx-auto w-full max-w-6xl flex-1 px-6 pb-8 sm:px-10"
+      >
         <section className="pt-8 pb-10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">

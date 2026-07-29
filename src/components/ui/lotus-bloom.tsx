@@ -4,7 +4,13 @@
  * This renders geometry only. Every motion beat — rising out of shadow, opening,
  * the zoom onto the focused petal, the move into the right column, and the
  * rotation that carries the reader between sections — is expressed as CSS
- * scroll-driven animation in `globals.css`.
+ * scroll-driven animation in `landing.css`.
+ *
+ * Alongside that scroll choreography the scene has an ambient layer that runs
+ * whether or not anybody scrolls: `.padma-orbit` breathes, ripples leave the
+ * receptacle, and motes drift up through the frame. The breath deliberately sits
+ * on its own wrapper rather than on `.padma-stage`, because the scroll camera
+ * owns the stage's `transform` and two animations cannot share one property.
  *
  * Two deliberate constraints shape the markup:
  *
@@ -91,29 +97,59 @@ function Petal({
   );
 }
 
+/** Expanding rings leaving the receptacle. Three staggered copies of one loop. */
+const HALO_COUNT = 3;
+
+/**
+ * Drifting motes. Enough of them to be noticed without being looked for, and few
+ * enough that each is a cheap composited layer moving only `transform` and
+ * `opacity`. Position, drift, size, duration, and phase come from `:nth-child`,
+ * which is also why this count and the rules in `landing.css` have to agree.
+ */
+const MOTE_COUNT = 22;
+
 export function LotusBloom() {
   return (
     <div className="padma-scene" aria-hidden="true">
       <span className="padma-shadow" />
 
       <div className="padma-perspective">
-        <div className="padma-stage">
-          {RINGS.map((ring) => (
-            <div key={ring.name} className="padma-ring" data-ring={ring.name}>
-              {Array.from({ length: ring.count }, (_, index) => (
-                // The first outer petal is the one the camera dives into.
-                <Petal
-                  key={index}
-                  gradientId={`padma-${ring.name}-depth-${index}`}
-                  focused={ring.name === "outer" && index === 0}
-                />
-              ))}
-            </div>
-          ))}
+        <div className="padma-orbit">
+          <div className="padma-stage">
+            {RINGS.map((ring) => (
+              <div key={ring.name} className="padma-ring" data-ring={ring.name}>
+                {Array.from({ length: ring.count }, (_, index) => (
+                  // The first outer petal is the one the camera dives into.
+                  <Petal
+                    key={index}
+                    gradientId={`padma-${ring.name}-depth-${index}`}
+                    focused={ring.name === "outer" && index === 0}
+                  />
+                ))}
+              </div>
+            ))}
 
-          <span className="padma-stamen" />
+            <span className="padma-stamen" />
+
+            {/* Inside the stage, so the ripples lie in the flower's own plane
+                and tilt with it instead of reading as a flat screen halo. */}
+            <span className="padma-halos">
+              {Array.from({ length: HALO_COUNT }, (_, index) => (
+                <span key={index} className="padma-halo" />
+              ))}
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Clipped by its own box rather than by the scene: on a wide, short
+          viewport the scene is shorter than the bloom, so clipping there would
+          crop the flower. */}
+      <span className="padma-motes">
+        {Array.from({ length: MOTE_COUNT }, (_, index) => (
+          <span key={index} className="padma-mote" />
+        ))}
+      </span>
     </div>
   );
 }

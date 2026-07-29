@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import "./globals.css";
 
+/*
+ * This boundary replaces the root layout, including ThemeHead. The global
+ * stylesheet's system-color fallbacks keep the last-resort UI readable without
+ * injecting a nonce-less style or script that the production CSP would reject.
+ */
 export default function GlobalError({
   error,
   unstable_retry,
@@ -17,9 +23,16 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <html lang="en" className="h-full">
+    <html
+      lang="en"
+      className="h-full"
+      suppressHydrationWarning
+    >
       <body className="min-h-full bg-background text-foreground">
-        <main className="mx-auto flex min-h-screen w-full max-w-2xl items-center px-6 py-20">
+        <main
+          id="main-content"
+          className="mx-auto flex min-h-screen w-full max-w-2xl items-center px-6 py-20"
+        >
           <div
             role="alert"
             aria-labelledby="root-error-title"

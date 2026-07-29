@@ -17,7 +17,10 @@ export function StatusPage({
   actionLabel = "Return home",
 }: StatusPageProps) {
   return (
-    <main className="mx-auto flex min-h-[75vh] w-full max-w-2xl items-center px-6 py-20">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-[75vh] w-full max-w-2xl items-center px-6 py-20"
+    >
       <Card className="w-full p-8 sm:p-10">
         <div className="flex items-start gap-4">
           <span

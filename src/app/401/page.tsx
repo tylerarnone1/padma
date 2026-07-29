@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { StatusPage } from "@/components/ui/status-page";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function UnauthorizedPage() {
   return (

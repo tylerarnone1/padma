@@ -21,10 +21,9 @@ export function Alert({
 }: AlertProps) {
   return (
     <div
-      role={variant === "danger" ? "alert" : "status"}
+      {...props}
       data-contrast-context="card"
       className={`flex gap-3 rounded-[var(--radius-md)] border border-border bg-card-surface p-4 ${className}`}
-      {...props}
     >
       <span
         aria-hidden="true"

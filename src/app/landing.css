@@ -1,0 +1,2703 @@
+/* ===========================================================================
+   Padma landing motion
+   ---------------------------------------------------------------------------
+   The whole page moves, and none of it ships client JavaScript. Three
+   mechanisms do all of the work:
+
+   1. Ambient loops. Time-based `@keyframes` that never stop: the atmosphere
+      drifts, the bloom breathes, ripples leave the receptacle, motes rise, a
+      word rotates. This is the layer that makes the page alive when nobody is
+      scrolling, which is the one thing a scroll-driven page cannot do for
+      itself.
+   2. Scroll-driven choreography. `view()` and `scroll()` timelines read the
+      scroll position on the compositor. Every rule that needs one is nested in
+      `@supports (animation-timeline: …)`, and the un-enhanced rendering is
+      always the complete, legible page.
+   3. Pointer state. Hover and focus only, expressed in CSS: magnetic
+      characters with real neighbour falloff via sibling combinators, traced
+      card borders, sheened buttons, a rail that answers where you are.
+
+   Two constraints shape everything here:
+
+   - No inline `style`. The production CSP sets `style-src 'self' 'nonce-…'`
+     with no `'unsafe-inline'`, so per-element indices — petal, character,
+     word, mote, beat — are derived from `:nth-child` rather than passed as
+     props.
+   - Motion is opt-out. Every ambient loop is disabled under
+     `prefers-reduced-motion: reduce` at the end of this file, and the page
+     still reads correctly with all of it off.
+   =========================================================================== */
+
+/* Registered so they interpolate smoothly instead of snapping between keyframes. */
+@property --petal-open {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: -30deg;
+}
+
+@property --bloom-shadow {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.34;
+}
+
+@property --bloom-glow {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.45;
+}
+
+@property --petal-reach {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: -14%;
+}
+
+@property --petal-fan {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.78;
+}
+
+@property --stamen-reveal {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --focus-strength {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* How lit one step of the beat rail is. Inherited so the mark and the label can
+   both read the single value the scroll timeline animates on their anchor. */
+@property --rail-on {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* The angle of the conic gradient traced around a hovered card's border. */
+@property --padma-trace-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ===========================================================================
+   Atmosphere
+   ---------------------------------------------------------------------------
+   A fixed, decorative field behind every section. Two ideas only: slow gradient
+   masses that drift on their own periods, and a dot weave that creeps by exactly
+   one cell so the loop is seamless.
+
+   Both animate `transform` alone. The masses are radial gradients rather than
+   blurred boxes precisely so no per-frame `filter` work is needed — a gradient
+   is already soft-edged, and the layer can then be cached and moved by the
+   compositor.
+   =========================================================================== */
+
+.padma-atmosphere {
+  position: fixed;
+  inset: 0;
+  /* Behind all content. `body { isolation: isolate }` in globals.css keeps this
+     above the canvas background rather than behind it. */
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.padma-aurora {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.padma-aurora:nth-child(1) {
+  top: -22%;
+  left: -12%;
+  width: 68vw;
+  height: 68vw;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklch, var(--primary) 20%, transparent),
+    transparent 64%
+  );
+  animation: padma-aurora-drift-a 41s ease-in-out infinite;
+}
+
+.padma-aurora:nth-child(2) {
+  top: 18%;
+  right: -20%;
+  width: 58vw;
+  height: 58vw;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklch, var(--primary) 14%, transparent),
+    transparent 62%
+  );
+  animation: padma-aurora-drift-b 53s ease-in-out infinite;
+}
+
+.padma-aurora:nth-child(3) {
+  bottom: -26%;
+  left: 22%;
+  width: 54vw;
+  height: 54vw;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklch, var(--focus) 12%, transparent),
+    transparent 60%
+  );
+  animation: padma-aurora-drift-c 67s ease-in-out infinite;
+}
+
+/* Inset past the viewport on all sides so the one-cell creep never exposes an
+   edge, and masked to a soft dome so the texture reads as depth, not wallpaper. */
+.padma-weave {
+  position: absolute;
+  inset: -48px;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    color-mix(in oklch, var(--foreground) 13%, transparent) 1px,
+    transparent 0
+  );
+  background-size: 38px 38px;
+  mask-image: radial-gradient(
+    ellipse 130% 66% at 50% 4%,
+    black,
+    transparent 74%
+  );
+  animation: padma-weave-creep 26s linear infinite;
+  will-change: transform;
+}
+
+@keyframes padma-aurora-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(9%, 7%, 0) scale(1.16);
+  }
+}
+
+@keyframes padma-aurora-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+  50% {
+    transform: translate3d(-11%, 10%, 0) scale(0.92);
+  }
+}
+
+@keyframes padma-aurora-drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.95);
+  }
+  50% {
+    transform: translate3d(7%, -9%, 0) scale(1.2);
+  }
+}
+
+@keyframes padma-weave-creep {
+  to {
+    transform: translate3d(38px, 38px, 0);
+  }
+}
+
+/* ===========================================================================
+   Padma bloom
+   ---------------------------------------------------------------------------
+   A scroll-driven lotus. The base layer below is the complete, static,
+   document-flow presentation: an open bloom above normally stacked copy. The
+   choreography is added only inside
+   `@supports (animation-timeline: view())` and only when the reader has not
+   asked for reduced motion, so the page is never dependent on it.
+
+   The ambient layer is deliberately separate from the scroll layer, and on
+   different elements. `.padma-stage` is the scroll camera's; `.padma-orbit`
+   wrapping it carries the breath. Two animations cannot share `transform` on
+   one element, and keeping them apart is also what lets the bud breathe before
+   a single pixel has been scrolled.
+   =========================================================================== */
+
+.padma-track {
+  position: relative;
+  view-timeline-name: --padma-bloom;
+  view-timeline-axis: block;
+}
+
+/*
+ * The bloom paints ABOVE the copy, so scrolling text slides behind an opaque
+ * flower instead of across it. `pointer-events: none` keeps the buttons
+ * underneath clickable.
+ */
+.padma-scene {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: min(78vh, 620px);
+  pointer-events: none;
+}
+
+.padma-shadow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(96vw, 880px);
+  height: min(58vh, 500px);
+  translate: -50% -44%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    color-mix(in oklch, var(--foreground) 30%, transparent),
+    transparent 68%
+  );
+  opacity: var(--bloom-shadow);
+  filter: blur(20px);
+}
+
+.padma-perspective {
+  display: grid;
+  place-items: center;
+  width: min(90vw, 84vh);
+  aspect-ratio: 1;
+  perspective: 1200px;
+  perspective-origin: 50% 44%;
+  transform-style: preserve-3d;
+}
+
+/* The breath. A slow, asymmetric lean rather than a pulse: a pure scale reads as
+   a heartbeat, while a drift plus a degree of roll reads as a living thing
+   sitting in air. */
+.padma-orbit {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  animation: padma-breathe 11s ease-in-out infinite;
+}
+
+.padma-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  /* Static presentation: an open bloom, tilted just enough to read as dimensional. */
+  transform: translate3d(0, 0, 0) rotateX(18deg) rotateZ(0deg) scale(0.92);
+}
+
+@keyframes padma-breathe {
+  0%,
+  100% {
+    transform: translate3d(0, 0.9%, 0) rotateZ(-1.3deg) scale(0.993);
+  }
+  50% {
+    transform: translate3d(0, -1.1%, 0) rotateZ(1.3deg) scale(1.015);
+  }
+}
+
+.padma-ring {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+/* Whorl geometry. `--ring-step` is 360deg / petal count, which lets the petal
+   index rules stay ring-agnostic.
+
+   Petals are opaque: translucent ones were the single biggest reason the bud
+   read as a striped cone, because two dozen see-through shapes blend into mush
+   instead of overlapping into a solid form with legible edges.
+
+   Fills are anchored to white and strokes to black rather than to the canvas.
+   Mixing both toward `--background` inverts their relationship between colour
+   modes — on a dark canvas the stroke ends up brighter than the fill and the
+   flower reads as a wireframe lantern. Anchoring instead keeps a lit petal with
+   a darker edge in both modes, which is how the form actually reads. The
+   anchors are light and shade, not palette colours, so every palette still
+   drives the hue through `--primary`.
+
+   Each ring rests at a shallower angle than the one outside it, which is what
+   gives the open flower its cupped centre instead of a flat daisy face. */
+.padma-ring[data-ring="base"] {
+  --ring-step: 45deg;
+  --ring-scale: 0.56;
+  --petal-open: -42deg;
+  --petal-reach: -16%;
+  --petal-fill: color-mix(in oklch, var(--primary) 24%, white);
+  --petal-stroke: color-mix(in oklch, var(--primary) 72%, black);
+  transform: rotateZ(30deg);
+}
+
+.padma-ring[data-ring="outer"] {
+  --ring-step: 40deg;
+  --ring-scale: 1;
+  --petal-open: -26deg;
+  --petal-fill: color-mix(in oklch, var(--primary) 32%, white);
+  --petal-stroke: color-mix(in oklch, var(--primary) 78%, black);
+}
+
+.padma-ring[data-ring="mid"] {
+  --ring-step: 51.4286deg;
+  --ring-scale: 0.76;
+  --petal-open: -46deg;
+  --petal-fill: color-mix(in oklch, var(--primary) 50%, white);
+  --petal-stroke: color-mix(in oklch, var(--primary) 86%, black);
+  transform: rotateZ(16deg);
+}
+
+.padma-ring[data-ring="core"] {
+  --ring-step: 72deg;
+  --ring-scale: 0.52;
+  --petal-open: -66deg;
+  --petal-fill: color-mix(in oklch, var(--primary) 68%, white);
+  --petal-stroke: color-mix(in oklch, var(--primary) 94%, black);
+  transform: rotateZ(34deg);
+}
+
+/* The base petals are smaller than the outer whorl, but broad enough to read
+   as cupped petals rather than a ring of detached spikes. */
+.padma-ring[data-ring="base"] > .padma-petal {
+  width: 36%;
+  height: 44%;
+  margin-left: -18%;
+}
+
+.padma-petal {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: 62%;
+  height: 44%;
+  margin-left: -31%;
+  overflow: visible;
+  transform-origin: 50% 100%;
+  /*
+   * Read right to left: the petal is scaled for its whorl, tilted out of the
+   * flower's plane, pushed outward onto the receptacle ring, then spun to its
+   * position around the axis.
+   *
+   * The outward step is what makes a closed bud possible. Hinged at a single
+   * centre point, petal tips can only splay *away* from the axis as they rise,
+   * so "closed" renders as a cone that is widest at the top — an upside-down
+   * bud. Offsetting the hinge onto a ring puts the bases wide at the bottom,
+   * and a tilt past 90deg then leans the tips back over the axis so they
+   * converge above it. Bulb, not spike.
+   *
+   * The offset is a share of the petal's own height and is scaled per whorl so
+   * the ring stays proportional to the petals attached to it.
+   */
+  transform: rotateZ(var(--petal-angle))
+    translateY(calc(var(--petal-reach) * var(--ring-scale, 1)))
+    rotateX(var(--petal-open)) scale(var(--ring-scale, 1))
+    scale(var(--petal-fan), var(--petal-vary, 1));
+  --petal-angle: calc(var(--petal-index, 0) * var(--ring-step, 30deg));
+}
+
+.padma-petal:nth-child(1) {
+  --petal-index: 0;
+  --petal-vary: 1;
+}
+.padma-petal:nth-child(2) {
+  --petal-index: 1;
+  --petal-vary: 0.93;
+}
+.padma-petal:nth-child(3) {
+  --petal-index: 2;
+  --petal-vary: 0.98;
+}
+.padma-petal:nth-child(4) {
+  --petal-index: 3;
+  --petal-vary: 0.9;
+}
+.padma-petal:nth-child(5) {
+  --petal-index: 4;
+  --petal-vary: 1;
+}
+.padma-petal:nth-child(6) {
+  --petal-index: 5;
+  --petal-vary: 0.95;
+}
+.padma-petal:nth-child(7) {
+  --petal-index: 6;
+  --petal-vary: 0.88;
+}
+.padma-petal:nth-child(8) {
+  --petal-index: 7;
+  --petal-vary: 0.97;
+}
+.padma-petal:nth-child(9) {
+  --petal-index: 8;
+  --petal-vary: 0.92;
+}
+.padma-petal:nth-child(10) {
+  --petal-index: 9;
+  --petal-vary: 1;
+}
+.padma-petal:nth-child(11) {
+  --petal-index: 10;
+  --petal-vary: 0.94;
+}
+.padma-petal:nth-child(12) {
+  --petal-index: 11;
+  --petal-vary: 0.96;
+}
+
+.padma-petal > .padma-petal-body {
+  fill: var(--petal-fill);
+  stroke: var(--petal-stroke);
+  /* The stroke scales with the geometry. `non-scaling-stroke` renders stippled
+     under the heavy 3D scale of the petal dive, and a scaled outline reads more
+     naturally there anyway. Width is in the 60x112 viewBox's own units. */
+  stroke-width: 1.15;
+  stroke-linejoin: round;
+}
+
+/* A five-stop diagonal glaze gives each otherwise flat SVG plane a rounded
+   cross-section. The hue still comes entirely from the active theme; these
+   translucent stops only describe light falling across that colour. */
+.padma-petal > .padma-petal-depth {
+  stroke: none;
+  pointer-events: none;
+}
+
+.padma-depth-shadow {
+  stop-color: var(--petal-stroke);
+  stop-opacity: 0.28;
+}
+
+.padma-depth-shadow-soft {
+  stop-color: var(--petal-stroke);
+  stop-opacity: 0.16;
+}
+
+.padma-depth-highlight {
+  stop-color: white;
+  stop-opacity: 0.3;
+}
+
+.padma-depth-clear {
+  stop-color: white;
+  stop-opacity: 0;
+}
+
+/* A restrained, hooked vein gives the open bloom ornamental linework without
+   putting a filled almond inside every furled petal. */
+.padma-petal > .padma-petal-inner {
+  fill: none;
+  stroke: color-mix(in oklch, var(--petal-stroke) 42%, transparent);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+
+/* The petal the camera dives into brightens and gains a defined edge. The
+   `:not()` keeps this off the inner highlight, which it would otherwise win. */
+.padma-petal[data-petal-focus] > .padma-petal-body {
+  fill: color-mix(
+    in oklch,
+    var(--primary) calc(40% + var(--focus-strength) * 52%),
+    transparent
+  );
+  stroke: color-mix(
+    in oklch,
+    var(--foreground) calc(var(--focus-strength) * 70%),
+    var(--petal-stroke)
+  );
+}
+
+/* The receptacle: a small dome ringed by stamens, rendered as a dotted conic
+   band so it stays a single element with no extra markup. */
+.padma-stamen {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(
+      circle at 50% 34%,
+      color-mix(in oklch, var(--surface) 92%, white),
+      var(--surface) 52%,
+      color-mix(in oklch, var(--surface) 62%, var(--primary))
+    )
+    no-repeat;
+  opacity: var(--stamen-reveal);
+  box-shadow:
+    0 0 0 4% color-mix(in oklch, var(--surface) 70%, transparent),
+    0 0 calc(var(--bloom-glow) * 44px)
+      color-mix(in oklch, var(--primary) 52%, transparent);
+}
+
+/* Ripples leaving the receptacle, in the flower's own plane, so they read as
+   rings crossing water rather than as a halo pasted onto the screen. Three
+   staggered copies of one 7.2s loop keep a ring always in flight. */
+.padma-halos {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.padma-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 26%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  border: 2px solid color-mix(in oklch, var(--primary) 72%, transparent);
+  opacity: 0;
+  animation: padma-ripple 7.2s cubic-bezier(0.2, 0.55, 0.3, 1) infinite;
+}
+
+/* Negative delays start the loop already in progress, so all three rings are
+   spaced from the first frame instead of arriving one after another. */
+.padma-halo:nth-child(1) {
+  animation-delay: 0s;
+}
+.padma-halo:nth-child(2) {
+  animation-delay: -2.4s;
+}
+.padma-halo:nth-child(3) {
+  animation-delay: -4.8s;
+}
+
+@keyframes padma-ripple {
+  0% {
+    scale: 0.4;
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.36;
+  }
+  100% {
+    scale: 3.5;
+    opacity: 0;
+  }
+}
+
+/* Pollen. Clipped by its own box rather than by `.padma-scene`, which on a wide,
+   short viewport is shorter than the bloom and would crop the flower. */
+.padma-motes {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/*
+ * Visible, not hunted for. Three things carry that, and the size is the least
+ * important of them: a nearly opaque core so the dot has an edge, two glow radii
+ * so it still reads where it crosses a lit petal, and a rise fast enough that the
+ * eye catches the movement rather than only the dot.
+ */
+.padma-mote {
+  position: absolute;
+  bottom: -3%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--primary) 92%, transparent);
+  box-shadow:
+    0 0 5px color-mix(in oklch, var(--primary) 80%, transparent),
+    0 0 18px color-mix(in oklch, var(--primary) 50%, transparent);
+  opacity: 0;
+  animation: padma-mote-rise linear infinite;
+  will-change: transform, opacity;
+}
+
+/*
+ * Left position, lateral drift, size, duration and phase per mote. The durations
+ * deliberately share no common factor, so the field never resolves into a
+ * visible pulse, and the negative delays put every mote mid-flight on the first
+ * frame instead of releasing all twenty-two from the floor at once.
+ *
+ * Sizes run from 0.6 to 1.3 of the base. A field of identical dots reads as a
+ * texture; a field of mixed ones reads as depth, and the large near ones are what
+ * actually catch the eye.
+ */
+.padma-mote:nth-child(1) {
+  left: 4%;
+  --mote-x: 2.1rem;
+  animation-duration: 13s;
+  animation-delay: -2s;
+  scale: 1.15;
+}
+.padma-mote:nth-child(2) {
+  left: 9%;
+  --mote-x: -1.4rem;
+  animation-duration: 17s;
+  animation-delay: -11s;
+  scale: 0.7;
+}
+.padma-mote:nth-child(3) {
+  left: 14%;
+  --mote-x: 3rem;
+  animation-duration: 11s;
+  animation-delay: -6s;
+  scale: 0.6;
+}
+.padma-mote:nth-child(4) {
+  left: 20%;
+  --mote-x: -2.6rem;
+  animation-duration: 19s;
+  animation-delay: -14s;
+  scale: 1.3;
+}
+.padma-mote:nth-child(5) {
+  left: 25%;
+  --mote-x: 1.2rem;
+  animation-duration: 14s;
+  animation-delay: -4s;
+  scale: 0.85;
+}
+.padma-mote:nth-child(6) {
+  left: 31%;
+  --mote-x: -3.4rem;
+  animation-duration: 20s;
+  animation-delay: -17s;
+  scale: 0.65;
+}
+.padma-mote:nth-child(7) {
+  left: 36%;
+  --mote-x: 2.8rem;
+  animation-duration: 12s;
+  animation-delay: -9s;
+  scale: 1.05;
+}
+.padma-mote:nth-child(8) {
+  left: 42%;
+  --mote-x: -1.8rem;
+  animation-duration: 18s;
+  animation-delay: -3s;
+  scale: 0.75;
+}
+.padma-mote:nth-child(9) {
+  left: 47%;
+  --mote-x: 3.6rem;
+  animation-duration: 15s;
+  animation-delay: -12s;
+  scale: 0.6;
+}
+.padma-mote:nth-child(10) {
+  left: 52%;
+  --mote-x: -2.2rem;
+  animation-duration: 16s;
+  animation-delay: -7s;
+  scale: 1.2;
+}
+.padma-mote:nth-child(11) {
+  left: 58%;
+  --mote-x: 1.6rem;
+  animation-duration: 13.5s;
+  animation-delay: -1s;
+  scale: 0.8;
+}
+.padma-mote:nth-child(12) {
+  left: 63%;
+  --mote-x: -3rem;
+  animation-duration: 19.5s;
+  animation-delay: -16s;
+  scale: 0.65;
+}
+.padma-mote:nth-child(13) {
+  left: 68%;
+  --mote-x: 2.4rem;
+  animation-duration: 11.5s;
+  animation-delay: -5s;
+  scale: 1.1;
+}
+.padma-mote:nth-child(14) {
+  left: 73%;
+  --mote-x: -1.1rem;
+  animation-duration: 17.5s;
+  animation-delay: -13s;
+  scale: 0.9;
+}
+.padma-mote:nth-child(15) {
+  left: 78%;
+  --mote-x: 3.2rem;
+  animation-duration: 14.5s;
+  animation-delay: -8s;
+  scale: 0.7;
+}
+.padma-mote:nth-child(16) {
+  left: 83%;
+  --mote-x: -2.4rem;
+  animation-duration: 20.5s;
+  animation-delay: -19s;
+  scale: 1.25;
+}
+.padma-mote:nth-child(17) {
+  left: 88%;
+  --mote-x: 1.9rem;
+  animation-duration: 12.5s;
+  animation-delay: -3.5s;
+  scale: 0.85;
+}
+.padma-mote:nth-child(18) {
+  left: 93%;
+  --mote-x: -3.6rem;
+  animation-duration: 18.5s;
+  animation-delay: -15s;
+  scale: 0.6;
+}
+.padma-mote:nth-child(19) {
+  left: 97%;
+  --mote-x: 1.4rem;
+  animation-duration: 15.5s;
+  animation-delay: -10s;
+  scale: 1;
+}
+/* Three off the even spacing, so the field does not read as a comb. */
+.padma-mote:nth-child(20) {
+  left: 17%;
+  --mote-x: -2.8rem;
+  animation-duration: 16.5s;
+  animation-delay: -6.5s;
+  scale: 0.75;
+}
+.padma-mote:nth-child(21) {
+  left: 55%;
+  --mote-x: 3.4rem;
+  animation-duration: 13s;
+  animation-delay: -11.5s;
+  scale: 0.65;
+}
+.padma-mote:nth-child(22) {
+  left: 85%;
+  --mote-x: -1.6rem;
+  animation-duration: 18s;
+  animation-delay: -20s;
+  scale: 1.15;
+}
+
+@keyframes padma-mote-rise {
+  0% {
+    opacity: 0;
+    translate: 0 0;
+  }
+  9% {
+    opacity: 0.95;
+  }
+  50% {
+    translate: var(--mote-x, 2rem) -36vh;
+  }
+  76% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 0;
+    translate: calc(var(--mote-x, 2rem) * -0.55) -74vh;
+  }
+}
+
+/* Copy layer. Sits above the bloom and carries all real content. */
+.padma-beats {
+  position: relative;
+  z-index: 1;
+}
+
+.padma-beat > * {
+  position: relative;
+}
+
+.padma-beat {
+  display: grid;
+  align-content: center;
+  padding-block: 9vh;
+  /* Named so descendants can share the section's progress. On its own `view()`
+     timeline a tall, low element lags badly — a 479px body paragraph sat at 19%
+     progress while its own title was at 41%, so the two could never be on
+     screen together. */
+  view-timeline-name: --padma-beat;
+  view-timeline-axis: block;
+}
+
+/* Centred beats sit in the lower band of the frame, under the rising bud. */
+.padma-beat[data-align="center"] {
+  justify-items: center;
+  text-align: center;
+}
+
+.padma-beat[data-align="left"] {
+  justify-items: start;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Centred copy is centred within the band *below* the bloom, rather than
+       pinned to the bottom edge, which would leave an empty frame between one
+       block fading out and the next rising into view. */
+    .padma-beat[data-align="center"] {
+      align-content: center;
+      padding-top: 54vh;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Enhancement: the scroll performance.
+   --------------------------------------------------------------------------- */
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* The bloom is lifted out of flow so the copy scrolls over a pinned stage.
+       `contain 0% → 100%` on a subject taller than the viewport spans exactly
+       the interval during which this sticky child stays pinned. */
+    .padma-shadow {
+      top: 30%;
+      translate: -50% -50%;
+      width: min(72vw, 640px);
+      height: min(42vh, 360px);
+    }
+
+    .padma-scene {
+      position: sticky;
+      top: 0;
+      height: 100svh;
+      overflow: hidden;
+      animation: padma-emerge linear both;
+      animation-timeline: --padma-bloom;
+      animation-range: contain 0% contain 100%;
+    }
+
+    /*
+     * The overlay offset lives here rather than on the sticky scene. A negative
+     * bottom margin on the sticky element collapses its margin box to zero
+     * height, so it never reaches its release constraint and stayed pinned over
+     * the closing section instead of stopping at the end of the track.
+     */
+    .padma-beats {
+      margin-top: -100svh;
+    }
+
+    .padma-beat {
+      height: 100svh;
+      min-height: 0;
+      padding-block: 0;
+    }
+
+    .padma-stage {
+      animation: padma-camera linear both;
+      animation-timeline: --padma-bloom;
+      animation-range: contain 0% contain 100%;
+    }
+
+    /* Whorls unfurl in sequence, outermost first, each to its own rest angle.
+       Longhands, not the shorthand: `animation: linear both` leaves `linear`
+       ambiguous between name and timing function, and the fill mode then fails
+       to apply before the range opens, which un-furls the bud at progress 0. */
+    .padma-ring {
+      animation-duration: auto;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: --padma-bloom;
+    }
+
+    .padma-ring[data-ring="base"] {
+      animation-name: padma-unfurl-base;
+      animation-range: contain 0% contain 12%;
+    }
+
+    .padma-ring[data-ring="outer"] {
+      animation-name: padma-unfurl-outer;
+      animation-range: contain 2% contain 16%;
+    }
+
+    .padma-ring[data-ring="mid"] {
+      animation-name: padma-unfurl-mid;
+      animation-range: contain 4% contain 18%;
+    }
+
+    .padma-ring[data-ring="core"] {
+      animation-name: padma-unfurl-core;
+      animation-range: contain 6% contain 20%;
+    }
+
+    /*
+     * Section headings get the hero's per-character treatment, but driven by
+     * scroll rather than by load: the entry moves off the time timeline onto the
+     * element's own view timeline. A character is a small box, so its view
+     * progress tracks the block it sits in closely — the lag that broke
+     * per-element reveals only bites on tall subjects.
+     *
+     * The scroll entry is `padma-char-rise`, not the load entry: the load one
+     * animates `filter`, which is fine once but is per-frame paint work when a
+     * few hundred characters run it against the scroll position.
+     */
+    [data-kinetic="scroll"] .padma-char-hit > span {
+      animation-name: padma-char-rise;
+      animation-duration: auto;
+      animation-timing-function: linear;
+      animation-delay: 0s;
+      animation-timeline: view();
+      animation-range: cover calc(28% + var(--seq) * 0.3%) cover
+        calc(46% + var(--seq) * 0.3%);
+    }
+
+    /* Headings leave later than the hero line, as their section scrolls away. */
+    [data-kinetic="scroll"] .padma-char {
+      animation-range: cover calc(62% + var(--seq) * 0.22%) cover
+        calc(80% + var(--seq) * 0.22%);
+    }
+
+    /*
+     * Inside a section, the heading is measured against the section rather than
+     * against itself. A single character is a small box, so it crosses its own
+     * view range roughly twice as fast as the section crosses the viewport, and
+     * on its own timeline the heading finished leaving while its own body copy
+     * was still fully on screen.
+     */
+    .padma-beat [data-kinetic="scroll"] .padma-char-hit > span {
+      animation-timeline: --padma-beat;
+      animation-range: cover calc(34% + var(--seq) * 0.2%) cover
+        calc(48% + var(--seq) * 0.2%);
+    }
+
+    .padma-beat [data-kinetic="scroll"] .padma-char {
+      animation-timeline: --padma-beat;
+      animation-range: cover calc(58% + var(--seq) * 0.2%) cover
+        calc(70% + var(--seq) * 0.2%);
+    }
+
+    /* A heading that sequences its own characters must not also be faded as a
+       block by the section reveal, or the two opacities compound. */
+    .padma-reveal > [data-kinetic] {
+      animation: none;
+    }
+
+    /* Exit: sequenced upward as the line scrolls away. Scroll timelines ignore
+       `animation-delay`, so the stagger is an offset on `animation-range`. */
+    .padma-char {
+      animation: padma-char-out linear both;
+      animation-timeline: view();
+      animation-range: cover calc(34% + var(--seq) * 0.32%) cover
+        calc(58% + var(--seq) * 0.32%);
+    }
+
+    /* Headline low and left, under the furled bud. */
+    .padma-beat[data-beat="hero"] {
+      align-content: end;
+      padding-bottom: 13vh;
+    }
+
+    /* Anchored to a fixed top edge rather than centred, so the thesis sits just
+       under the open bloom instead of drifting to the bottom of the frame. */
+    .padma-beat[data-beat="thesis"] {
+      align-content: start;
+      padding-top: 52vh;
+    }
+
+    /* The eyebrow and the scroll cue are single elements rather than split
+       characters, so they leave on the same curve as the headline's letters
+       instead of needing their own. */
+    .padma-hero-aside {
+      animation: padma-char-out linear both;
+      animation-timeline: view();
+      animation-range: cover 34% cover 58%;
+    }
+
+    /* The cue has said everything it has to say by the time the reader has
+       taken the hint. */
+    .padma-cue {
+      animation: padma-fade-out linear both;
+      animation-timeline: --padma-bloom;
+      animation-range: contain 0% contain 4%;
+    }
+
+    /*
+     * Each element inside a section reveals on its own timeline rather than the
+     * block fading as one piece, so a label leads, its title follows, and the
+     * body arrives last. Every element is its own `view()` subject, and the
+     * order offset comes from `:nth-child` because the CSP rules out passing it
+     * as a prop.
+     */
+    .padma-reveal > * {
+      animation: padma-reveal-pass linear both;
+      animation-timeline: --padma-beat;
+      /* Staggered in, out together: offsetting the end as well let a title
+         disappear while its own body was still fully visible. */
+      animation-range: cover calc(30% + var(--reveal-i, 0) * 4%) cover 78%;
+    }
+
+    /* On narrow screens the bloom stays centred and never slides into a column.
+       There is no side column to move into, so the copy is pushed to the bottom
+       of the frame instead and the two share the height rather than overlapping. */
+    @media (max-width: 1023px) {
+      .padma-stage {
+        animation-name: padma-camera-compact;
+      }
+
+      .padma-beat[data-align="left"] {
+        align-content: end;
+        padding-bottom: 9vh;
+      }
+
+      .padma-beat[data-align="center"] {
+        padding-top: 54vh;
+      }
+    }
+  }
+}
+
+/* The camera path. Every keyframe repeats the same function list in the same
+   order so the interpolation stays smooth, and the bloom is held in the upper
+   band of the frame through the opening beats to keep the copy legible. */
+@keyframes padma-camera {
+  /* Begin partway through the unfurl. The staggered, three-quarter bulb is a
+     stronger hero silhouette than the sealed, nearly symmetrical pose that
+     previously occupied the first few percent of the scroll. */
+  0% {
+    transform: translate3d(0, 2vh, 0) rotateX(41.5deg) rotateZ(-33deg)
+      scale(1.1625);
+  }
+  10% {
+    transform: translate3d(0, 2vh, 0) rotateX(40deg) rotateZ(-12deg) scale(1.2);
+  }
+  /* Open, three-quarter view, still centred. Pairs with the thesis. */
+  20% {
+    transform: translate3d(0, -13vh, 0) rotateX(38deg) rotateZ(40deg)
+      scale(0.72);
+  }
+  /* Dive onto the focused petal, cropped hard by the right edge so the
+     foundation copy keeps the left half of the frame. */
+  40% {
+    transform: translate3d(34vw, 2vh, 0) rotateX(28deg) rotateZ(96deg)
+      scale(2.5);
+  }
+  /* Settle into the right column, read from above, still cropped. */
+  60% {
+    transform: translate3d(40vw, 0, 0) rotateX(12deg) rotateZ(150deg) scale(2.1);
+  }
+  80% {
+    transform: translate3d(40vw, 0, 0) rotateX(4deg) rotateZ(224deg) scale(2.1);
+  }
+  100% {
+    transform: translate3d(40vw, 0, 0) rotateX(0deg) rotateZ(340deg) scale(2.1);
+  }
+}
+
+/* Narrow screens keep the bloom centred and never form a second column. */
+@keyframes padma-camera-compact {
+  0% {
+    transform: translate3d(0, 3vh, 0) rotateX(41.5deg) rotateZ(-30deg)
+      scale(1.01);
+  }
+  10% {
+    transform: translate3d(0, 3vh, 0) rotateX(40deg) rotateZ(-12deg) scale(1.04);
+  }
+  20% {
+    transform: translate3d(0, -20vh, 0) rotateX(38deg) rotateZ(40deg) scale(0.8);
+  }
+  40% {
+    transform: translate3d(0, -8vh, 0) rotateX(28deg) rotateZ(96deg) scale(1.7);
+  }
+  60% {
+    transform: translate3d(0, -24vh, 0) rotateX(12deg) rotateZ(150deg)
+      scale(0.92);
+  }
+  80% {
+    transform: translate3d(0, -24vh, 0) rotateX(4deg) rotateZ(224deg)
+      scale(0.92);
+  }
+  100% {
+    transform: translate3d(0, -24vh, 0) rotateX(0deg) rotateZ(340deg)
+      scale(0.92);
+  }
+}
+
+@keyframes padma-unfurl-outer {
+  from {
+    --petal-open: -94deg;
+    --petal-reach: -12%;
+    --petal-fan: 1;
+  }
+  to {
+    --petal-open: -26deg;
+    --petal-reach: -14%;
+    --petal-fan: 0.78;
+  }
+}
+
+@keyframes padma-unfurl-mid {
+  from {
+    --petal-open: -100deg;
+    --petal-reach: -12%;
+    --petal-fan: 1;
+  }
+  to {
+    --petal-open: -46deg;
+    --petal-reach: -14%;
+    --petal-fan: 0.8;
+  }
+}
+
+@keyframes padma-unfurl-core {
+  from {
+    --petal-open: -104deg;
+    --petal-reach: -12%;
+    --petal-fan: 1;
+  }
+  to {
+    --petal-open: -66deg;
+    --petal-reach: -14%;
+    --petal-fan: 0.84;
+  }
+}
+
+/* The supporting petals cup the bud before relaxing beneath the open bloom. */
+@keyframes padma-unfurl-base {
+  from {
+    --petal-open: -53deg;
+    --petal-reach: -12%;
+  }
+  to {
+    --petal-open: -42deg;
+    --petal-reach: -16%;
+  }
+}
+
+@keyframes padma-emerge {
+  0% {
+    --bloom-shadow: 0.88;
+    --bloom-glow: 0.04;
+    --focus-strength: 0;
+    --stamen-reveal: 0;
+  }
+  12% {
+    --bloom-shadow: 0.6;
+    --bloom-glow: 0.2;
+    --focus-strength: 0;
+    --stamen-reveal: 0;
+  }
+  20% {
+    --bloom-shadow: 0.44;
+    --bloom-glow: 0.34;
+    --focus-strength: 0;
+    --stamen-reveal: 1;
+  }
+  40% {
+    --bloom-shadow: 0.26;
+    --bloom-glow: 0.9;
+    --focus-strength: 1;
+    --stamen-reveal: 1;
+  }
+  52% {
+    --bloom-shadow: 0.28;
+    --bloom-glow: 0.7;
+    --focus-strength: 0;
+    --stamen-reveal: 1;
+  }
+  100% {
+    --bloom-shadow: 0.3;
+    --bloom-glow: 0.5;
+    --focus-strength: 0;
+    --stamen-reveal: 1;
+  }
+}
+
+/* Held at full opacity only while the block is near the centre of the frame.
+   It is fully faded by 72%, which is the point at which a viewport-tall block
+   would otherwise be sitting in the upper band where the bloom lives. */
+@keyframes padma-reveal-pass {
+  0% {
+    opacity: 0;
+    transform: translateY(2.25rem);
+  }
+  24% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  64% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  88% {
+    opacity: 0;
+    transform: translateY(-1.75rem);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-1.75rem);
+  }
+}
+
+@keyframes padma-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reveal order within a section. */
+.padma-reveal > :nth-child(1) {
+  --reveal-i: 0;
+}
+.padma-reveal > :nth-child(2) {
+  --reveal-i: 1;
+}
+.padma-reveal > :nth-child(3) {
+  --reveal-i: 2;
+}
+.padma-reveal > :nth-child(4) {
+  --reveal-i: 3;
+}
+
+/* ===========================================================================
+   Kinetic headline
+   ---------------------------------------------------------------------------
+   Characters fly up into place on load, respond to the pointer, and fly out
+   upward on scroll. Three nested elements per character, each owning exactly one
+   of those, because all three animate `transform` and the innermost two also
+   animate `opacity` or `color`:
+
+     .padma-char        scroll exit
+       .padma-char-hit  pointer state (transition, never animation)
+         span           load entry
+
+   The sequence index cannot be passed as a prop under the production CSP, so it
+   is derived from `:nth-child` and combined into one `--seq` counter. The word
+   term is a fixed stride rather than the true character offset, which keeps the
+   wave continuous without needing to know each word's length.
+   =========================================================================== */
+
+.padma-word {
+  /* Characters are inline-block, so without this a line could break inside a
+     word at any character boundary. */
+  white-space: nowrap;
+}
+
+/*
+ * The hero headline is one unbroken line. Its size is driven by viewport width
+ * so it always fits without overflowing, since `nowrap` would otherwise push a
+ * horizontal scrollbar onto the page. Below the breakpoint a single line would
+ * be too small to read, so it is allowed to wrap there instead.
+ */
+.padma-headline {
+  white-space: nowrap;
+  font-size: clamp(1.4rem, 4.2vw, 7rem);
+  line-height: 1.04;
+  /* The letters are the interactive element; a text caret would promise
+     selection behaviour the magnetic hover does not have. */
+  cursor: default;
+}
+
+@media (max-width: 40rem) {
+  .padma-headline {
+    white-space: normal;
+    font-size: clamp(2rem, 8.5vw, 3rem);
+  }
+}
+
+.padma-char,
+.padma-char-hit,
+.padma-char-hit > span {
+  display: inline-block;
+}
+
+.padma-char {
+  --seq: calc(var(--word-i, 0) * 5 + var(--char-i, 0));
+}
+
+/* The pointer layer. Its own perspective, so the entry's `rotateX` on the child
+   reads as a letter tipping up towards the reader rather than as a flat squash. */
+.padma-char-hit {
+  perspective: 520px;
+  transition:
+    transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 200ms ease,
+    text-shadow 200ms ease;
+}
+
+/*
+ * Magnetic falloff. The hovered character lifts most, its immediate neighbours
+ * follow at roughly half, and the next pair barely move — which is what makes
+ * the line feel like a physical surface rather than a row of buttons.
+ *
+ * Both directions are reachable in CSS: forwards with the sibling combinator,
+ * backwards with `:has()` on the same combinator. The chain stops at word
+ * boundaries because `.padma-word` breaks the sibling relationship, and that
+ * reads correctly — a word is the unit the eye groups anyway.
+ */
+.padma-char:hover > .padma-char-hit {
+  transform: translateY(-0.17em) scale(1.07);
+  color: var(--primary);
+  text-shadow: 0 0 28px color-mix(in oklch, var(--primary) 42%, transparent);
+}
+
+/* Headings that are already primary invert instead, so the hovered letter is
+   always the one that changed. */
+[data-kinetic="scroll"] .padma-char:hover > .padma-char-hit {
+  color: var(--foreground);
+  text-shadow: 0 0 28px color-mix(in oklch, var(--foreground) 34%, transparent);
+}
+
+.padma-char:hover + .padma-char > .padma-char-hit,
+.padma-char:has(+ .padma-char:hover) > .padma-char-hit {
+  transform: translateY(-0.095em) scale(1.035);
+}
+
+.padma-char:hover + .padma-char + .padma-char > .padma-char-hit,
+.padma-char:has(+ .padma-char + .padma-char:hover) > .padma-char-hit {
+  transform: translateY(-0.04em) scale(1.012);
+}
+
+/* Entry: on render, rising and tipping into place out of a blur. */
+.padma-char-hit > span {
+  animation: padma-char-in 880ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--seq) * 32ms);
+  transform-origin: 50% 100%;
+}
+
+@keyframes padma-char-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.9em) rotateX(-58deg) scale(0.94);
+    filter: blur(7px);
+  }
+  55% {
+    filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0deg) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* The scroll-driven entry. Same feel, no `filter`: this one is evaluated against
+   the scroll position for every character on the page. */
+@keyframes padma-char-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.9em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes padma-char-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-0.85em);
+  }
+}
+
+.padma-word:nth-child(1) {
+  --word-i: 0;
+}
+
+.padma-word:nth-child(2) {
+  --word-i: 1;
+}
+
+.padma-word:nth-child(3) {
+  --word-i: 2;
+}
+
+.padma-word:nth-child(4) {
+  --word-i: 3;
+}
+
+.padma-word:nth-child(5) {
+  --word-i: 4;
+}
+
+.padma-word:nth-child(6) {
+  --word-i: 5;
+}
+
+.padma-word:nth-child(7) {
+  --word-i: 6;
+}
+
+.padma-word:nth-child(8) {
+  --word-i: 7;
+}
+
+.padma-word:nth-child(9) {
+  --word-i: 8;
+}
+
+.padma-word:nth-child(10) {
+  --word-i: 9;
+}
+
+.padma-char:nth-child(1) {
+  --char-i: 0;
+}
+
+.padma-char:nth-child(2) {
+  --char-i: 1;
+}
+
+.padma-char:nth-child(3) {
+  --char-i: 2;
+}
+
+.padma-char:nth-child(4) {
+  --char-i: 3;
+}
+
+.padma-char:nth-child(5) {
+  --char-i: 4;
+}
+
+.padma-char:nth-child(6) {
+  --char-i: 5;
+}
+
+.padma-char:nth-child(7) {
+  --char-i: 6;
+}
+
+.padma-char:nth-child(8) {
+  --char-i: 7;
+}
+
+.padma-char:nth-child(9) {
+  --char-i: 8;
+}
+
+.padma-char:nth-child(10) {
+  --char-i: 9;
+}
+
+.padma-char:nth-child(11) {
+  --char-i: 10;
+}
+
+.padma-char:nth-child(12) {
+  --char-i: 11;
+}
+
+.padma-char:nth-child(13) {
+  --char-i: 12;
+}
+
+.padma-char:nth-child(14) {
+  --char-i: 13;
+}
+
+.padma-char:nth-child(15) {
+  --char-i: 14;
+}
+
+.padma-char:nth-child(16) {
+  --char-i: 15;
+}
+
+.padma-char:nth-child(17) {
+  --char-i: 16;
+}
+
+.padma-char:nth-child(18) {
+  --char-i: 17;
+}
+
+/* ===========================================================================
+   Wordmark
+   ---------------------------------------------------------------------------
+   The mark's petals carry `transform` presentation attributes so the SVG is
+   correct with no stylesheet at all. CSS transforms win over those attributes,
+   which is what lets the fan open on hover — each petal is simply re-declared
+   at a wider angle. `transform-box: view-box` makes the hinge coordinates mean
+   the same thing they mean in the markup.
+   =========================================================================== */
+
+.padma-mark path {
+  transform-box: view-box;
+  transform-origin: 16px 24px;
+  transition:
+    transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 320ms ease;
+}
+
+.padma-brand:hover .padma-mark path,
+.padma-brand:focus-visible .padma-mark path {
+  opacity: 1;
+}
+
+.padma-brand:hover .padma-mark path[data-petal="0"],
+.padma-brand:focus-visible .padma-mark path[data-petal="0"] {
+  transform: rotate(-92deg);
+}
+
+.padma-brand:hover .padma-mark path[data-petal="1"],
+.padma-brand:focus-visible .padma-mark path[data-petal="1"] {
+  transform: rotate(-46deg);
+}
+
+.padma-brand:hover .padma-mark path[data-petal="2"],
+.padma-brand:focus-visible .padma-mark path[data-petal="2"] {
+  transform: translateY(-1.5px) scale(1.06);
+}
+
+.padma-brand:hover .padma-mark path[data-petal="3"],
+.padma-brand:focus-visible .padma-mark path[data-petal="3"] {
+  transform: rotate(46deg);
+}
+
+.padma-brand:hover .padma-mark path[data-petal="4"],
+.padma-brand:focus-visible .padma-mark path[data-petal="4"] {
+  transform: rotate(92deg);
+}
+
+/* ===========================================================================
+   Navigation, progress, and the beat rail
+   =========================================================================== */
+
+.padma-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  /* The backdrop is a `z-index: -1` pseudo-element; isolating the nav keeps it
+     from falling behind the page instead of behind the nav's own content. */
+  isolation: isolate;
+}
+
+/*
+ * Default state is present, not absent: without scroll-timeline support the nav
+ * needs its backdrop from the first frame, or it sits unreadably over the bloom.
+ * The animation below only takes it away at the very top of the page.
+ */
+.padma-nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in oklch, var(--background) 78%, transparent);
+  backdrop-filter: blur(16px) saturate(1.15);
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 65%, transparent);
+}
+
+@supports (animation-timeline: scroll()) {
+  .padma-nav::before {
+    animation: padma-nav-settle linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 160px;
+  }
+}
+
+@keyframes padma-nav-settle {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * The beat rail. Six steps, one per beat of the pinned track, each an anchor to
+ * that beat.
+ *
+ * The arithmetic that makes the ranges exact: the track is the sticky scene plus
+ * six viewport-tall beats pulled up by one viewport, so it is 600svh inside a
+ * 100svh window and `contain 0% → 100%` spans 500svh of scrolling. Beat *i*
+ * therefore fills the frame at progress *i/5* — 0%, 20%, 40%, 60%, 80%, 100% —
+ * which is also where the camera's own keyframes sit.
+ *
+ * Every step shares one range and gets its own keyframes rather than sharing
+ * keyframes and getting its own range. The alternative needs offsets outside
+ * 0–100% for the first and last steps, and an invalid `animation-range` drops
+ * the whole declaration.
+ *
+ * It is a fixed element inside `.padma-track` on purpose: fixed so it costs the
+ * track no height and cannot shift the beat arithmetic above, inside the track
+ * so `--padma-bloom` is still in scope.
+ */
+.padma-rail {
+  display: none;
+}
+
+/*
+ * The steps are the stations and the spine is the line they sit on, so reading
+ * position and travelling it are the same gesture in the same axis. Replacing a
+ * horizontal bar under the nav with this was the point: a page whose every other
+ * movement is vertical should not report its progress sideways.
+ *
+ * Positioned and raised so the dots occlude the spine rather than the spine
+ * painting over them — an absolutely positioned sibling would otherwise win over
+ * static grid items no matter what the DOM order is.
+ */
+.padma-rail-step {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  /* Fixed, not a minimum: the spine's geometry below is derived from it. */
+  height: 1.5rem;
+  padding-right: 0.25rem;
+}
+
+/*
+ * From the first dot's centre to the last dot's centre, which is what makes the
+ * fill exact rather than approximate. Each step is 1.5rem tall with its dot
+ * centred, so both ends inset by half a step.
+ */
+.padma-rail-spine {
+  position: absolute;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  left: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--foreground) 15%, transparent);
+}
+
+/*
+ * Grows downward from the first station. The arithmetic lands exactly: the fill
+ * spans dot to dot, so at progress *i/5* it reaches dot *i* — the same instant
+ * that step's own keyframes light it.
+ */
+.padma-rail-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    color-mix(in oklch, var(--primary) 65%, transparent),
+    var(--primary)
+  );
+  transform-origin: 50% 0;
+  scale: 1 0;
+}
+
+/*
+ * An inset ring rather than a border, so the ring can thicken as the step
+ * activates without the dot changing size, and an opaque centre so it reads as a
+ * station on the line instead of a bead floating over it.
+ *
+ * Emphatically no `transition` on these properties. `--rail-on` is driven by the
+ * scroll timeline, so every property derived from it is recomputed continuously
+ * while the reader scrolls — a transition would make each of those steps chase
+ * its own 180ms curve and the whole rail would lag the scroll it is reporting.
+ * The scroll-driven values are already smooth because scrolling is. The hover
+ * polish lives on the halo below instead, on properties `--rail-on` never
+ * touches.
+ */
+.padma-rail-mark {
+  position: relative;
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--background);
+  box-shadow: inset 0 0 0 calc(1.5px + var(--rail-on) * 1.6px)
+    color-mix(
+      in oklch,
+      var(--foreground) calc(30% + var(--rail-on) * 60%),
+      transparent
+    );
+  scale: calc(0.85 + var(--rail-on) * 0.62);
+}
+
+/* The hover response: a ring opening outward from the station. */
+.padma-rail-mark::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in oklch, var(--primary) 60%, transparent);
+  opacity: 0;
+  scale: 0.55;
+  transition:
+    opacity 200ms ease,
+    scale 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.padma-rail-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--muted);
+  opacity: calc(var(--rail-on) * 0.92);
+  translate: calc((var(--rail-on) - 1) * 0.45rem) 0;
+}
+
+/* Colour only, not size: `scale` is scroll-driven here, so overriding it on
+   hover would snap the dot rather than move it. The halo carries the motion. */
+.padma-rail-step:hover .padma-rail-mark,
+.padma-rail-step:focus-visible .padma-rail-mark {
+  box-shadow: inset 0 0 0 3px var(--primary);
+}
+
+.padma-rail-step:hover .padma-rail-mark::after,
+.padma-rail-step:focus-visible .padma-rail-mark::after {
+  opacity: 1;
+  scale: 1;
+}
+
+.padma-rail-step:hover .padma-rail-label,
+.padma-rail-step:focus-visible .padma-rail-label {
+  color: var(--foreground);
+  opacity: 1;
+  translate: 0 0;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    @media (min-width: 64rem) {
+      .padma-rail {
+        position: fixed;
+        top: 50%;
+        left: clamp(0.75rem, 1.7vw, 1.85rem);
+        /* Above the bloom, which crosses into the right column and would
+           otherwise paint over the rail from the middle of the track onward. */
+        z-index: 4;
+        display: grid;
+        gap: 0.9rem;
+        translate: 0 -50%;
+        animation: padma-rail-presence linear both;
+        animation-timeline: --padma-bloom;
+        animation-range: contain 0% contain 100%;
+      }
+
+      /* The vertical reading progress. Not gated on reduced motion in spirit —
+         it is a position readout, not decoration — but it needs the track's
+         timeline, which only exists in here. It animates `scale`, so the
+         compositor handles it without laying the page out again. */
+      .padma-rail-fill {
+        animation: padma-rail-progress linear both;
+        animation-timeline: --padma-bloom;
+        animation-range: contain 0% contain 100%;
+      }
+
+      .padma-rail-step {
+        animation-duration: auto;
+        animation-timing-function: linear;
+        animation-fill-mode: both;
+        animation-timeline: --padma-bloom;
+        animation-range: contain 0% contain 100%;
+      }
+
+      /*
+       * `nth-of-type`, not `nth-child`. The steps share the rail with the spine,
+       * so counting every sibling would offset all six indices by one — step one
+       * would light nothing and step six would never light at all. Counting
+       * anchors instead makes the position of the spine in the markup irrelevant.
+       */
+      .padma-rail-step:nth-of-type(1) {
+        animation-name: padma-rail-0;
+      }
+      .padma-rail-step:nth-of-type(2) {
+        animation-name: padma-rail-1;
+      }
+      .padma-rail-step:nth-of-type(3) {
+        animation-name: padma-rail-2;
+      }
+      .padma-rail-step:nth-of-type(4) {
+        animation-name: padma-rail-3;
+      }
+      .padma-rail-step:nth-of-type(5) {
+        animation-name: padma-rail-4;
+      }
+      .padma-rail-step:nth-of-type(6) {
+        animation-name: padma-rail-5;
+      }
+    }
+  }
+}
+
+@keyframes padma-rail-progress {
+  from {
+    scale: 1 0;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
+@keyframes padma-rail-presence {
+  0% {
+    opacity: 0;
+    translate: -0.7rem -50%;
+  }
+  4%,
+  95% {
+    opacity: 1;
+    translate: 0 -50%;
+  }
+  100% {
+    opacity: 0;
+    translate: -0.7rem -50%;
+  }
+}
+
+@keyframes padma-rail-0 {
+  0% {
+    --rail-on: 1;
+  }
+  12%,
+  100% {
+    --rail-on: 0;
+  }
+}
+
+@keyframes padma-rail-1 {
+  0%,
+  8% {
+    --rail-on: 0;
+  }
+  20% {
+    --rail-on: 1;
+  }
+  32%,
+  100% {
+    --rail-on: 0;
+  }
+}
+
+@keyframes padma-rail-2 {
+  0%,
+  28% {
+    --rail-on: 0;
+  }
+  40% {
+    --rail-on: 1;
+  }
+  52%,
+  100% {
+    --rail-on: 0;
+  }
+}
+
+@keyframes padma-rail-3 {
+  0%,
+  48% {
+    --rail-on: 0;
+  }
+  60% {
+    --rail-on: 1;
+  }
+  72%,
+  100% {
+    --rail-on: 0;
+  }
+}
+
+@keyframes padma-rail-4 {
+  0%,
+  68% {
+    --rail-on: 0;
+  }
+  80% {
+    --rail-on: 1;
+  }
+  92%,
+  100% {
+    --rail-on: 0;
+  }
+}
+
+@keyframes padma-rail-5 {
+  0%,
+  88% {
+    --rail-on: 0;
+  }
+  100% {
+    --rail-on: 1;
+  }
+}
+
+/* ===========================================================================
+   Hero furniture: the live pill, the rotating word, the scroll cue
+   =========================================================================== */
+
+.padma-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: clamp(0.7rem, 0.8vw, 0.95rem);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.padma-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in oklch, var(--primary) 34%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
+  padding: 0.3rem 0.75rem;
+}
+
+.padma-live-dot {
+  position: relative;
+  display: block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+/* The expanding ring is a pseudo-element so the solid dot underneath never
+   loses its edge to the animation. */
+.padma-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: padma-ping 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes padma-ping {
+  0% {
+    scale: 1;
+    opacity: 0.65;
+  }
+  72%,
+  100% {
+    scale: 3.4;
+    opacity: 0;
+  }
+}
+
+/*
+ * The rotating word. An `inline-grid` with every word stacked in the one cell,
+ * so the box is as wide as the longest word and nothing on the line reflows as
+ * the words change. `overflow: hidden` turns the cell into a slot the words
+ * travel through.
+ *
+ * Positive, not negative, delays: with `both` fill every word holds its
+ * pre-entry state — opacity zero — until its turn arrives, so the first cycle
+ * looks like every later one.
+ */
+/* A flex row, not inline text, so the slot is centred against its label by
+   layout instead of by a `vertical-align` guess. An `overflow: hidden`
+   inline-block takes its own bottom edge as its baseline, which puts the
+   rotating word visibly high on the line. */
+.padma-eyebrow-phrase {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5ch;
+}
+
+.padma-cycler {
+  display: inline-grid;
+  overflow: hidden;
+  text-align: left;
+  line-height: 1.25;
+  color: var(--foreground);
+}
+
+.padma-cycler > span {
+  grid-area: 1 / 1;
+  animation: padma-cycle 13s linear infinite both;
+}
+
+.padma-cycler > span:nth-child(1) {
+  animation-delay: 0s;
+}
+.padma-cycler > span:nth-child(2) {
+  animation-delay: 2.6s;
+}
+.padma-cycler > span:nth-child(3) {
+  animation-delay: 5.2s;
+}
+.padma-cycler > span:nth-child(4) {
+  animation-delay: 7.8s;
+}
+.padma-cycler > span:nth-child(5) {
+  animation-delay: 10.4s;
+}
+
+/* One fifth of the cycle visible, with the hand-off overlapping by a few
+   percent so the slot is never briefly empty. */
+@keyframes padma-cycle {
+  0% {
+    opacity: 0;
+    translate: 0 0.7em;
+    filter: blur(5px);
+  }
+  4%,
+  17% {
+    opacity: 1;
+    translate: 0 0;
+    filter: blur(0);
+  }
+  21%,
+  100% {
+    opacity: 0;
+    translate: 0 -0.7em;
+    filter: blur(5px);
+  }
+}
+
+.padma-cue {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 2.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.padma-cue-track {
+  position: relative;
+  display: block;
+  width: 1px;
+  height: 2.75rem;
+  background: linear-gradient(
+    color-mix(in oklch, var(--foreground) 34%, transparent),
+    transparent
+  );
+}
+
+.padma-cue-dot {
+  position: absolute;
+  top: 0;
+  left: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--primary) 55%, transparent);
+  animation: padma-cue-fall 2s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+
+@keyframes padma-cue-fall {
+  0% {
+    translate: 0 0;
+    opacity: 0;
+  }
+  22%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    translate: 0 2.5rem;
+    opacity: 0;
+  }
+}
+
+/* ===========================================================================
+   Calls to action
+   =========================================================================== */
+
+.padma-cta {
+  position: relative;
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 240ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+
+.padma-cta-lg {
+  min-height: 2.75rem;
+  padding: 0.7rem 1.35rem;
+}
+
+.padma-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* The press has to be faster than the lift or the button feels spongy. */
+.padma-cta:active {
+  transform: translateY(0) scale(0.985);
+  box-shadow: var(--shadow-sm);
+  transition-duration: 90ms;
+}
+
+/* A single pass of light, triggered by hover rather than looping, so it reads as
+   a response and not as decoration. */
+.padma-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  translate: -125% 0;
+  background: linear-gradient(
+    100deg,
+    transparent 22%,
+    color-mix(in oklch, white 40%, transparent) 50%,
+    transparent 78%
+  );
+  pointer-events: none;
+}
+
+.padma-cta:hover::after,
+.padma-cta:focus-visible::after {
+  animation: padma-sheen 760ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+@keyframes padma-sheen {
+  from {
+    translate: -125% 0;
+  }
+  to {
+    translate: 125% 0;
+  }
+}
+
+.padma-cta-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.padma-cta-primary:hover {
+  background: var(--primary-hover);
+}
+
+.padma-cta-quiet {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.padma-cta-quiet:hover {
+  background: var(--surface-raised);
+  border-color: color-mix(in oklch, var(--primary) 50%, var(--border));
+}
+
+.padma-arrow {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.padma-arrow:hover {
+  color: var(--foreground);
+}
+
+.padma-arrow-glyph {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.padma-arrow:hover .padma-arrow-glyph,
+.padma-arrow:focus-visible .padma-arrow-glyph {
+  transform: translateX(5px);
+}
+
+/* Drawn from the left rather than faded in, which makes the direction of the
+   link and the direction of the underline agree. */
+.padma-arrow::after {
+  content: "";
+  position: absolute;
+  right: 1.5rem;
+  bottom: -3px;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+  transform-origin: 0 50%;
+  scale: 0 1;
+  transition: scale 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.padma-arrow:hover::after,
+.padma-arrow:focus-visible::after {
+  scale: 1 1;
+}
+
+/* ===========================================================================
+   Foundation cards
+   =========================================================================== */
+
+.padma-foundation-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 48rem) {
+  .padma-foundation-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.padma-foundation {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 340ms ease,
+    border-color 340ms ease,
+    opacity 340ms ease;
+}
+
+.padma-foundation:hover,
+.padma-foundation:focus-within {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-md);
+  border-color: color-mix(in oklch, var(--primary) 45%, var(--border));
+}
+
+/* Attention costs something: the cards the reader is not pointing at step back
+   so the one they are pointing at steps forward. */
+.padma-foundation-grid:has(> .padma-foundation:hover)
+  > .padma-foundation:not(:hover) {
+  opacity: 0.5;
+}
+
+/* An oversized ghost of the card's own number, arriving from below the corner.
+   `attr()` keeps the value in one place — the same attribute the visible label
+   is rendered from. */
+.padma-foundation::after {
+  content: attr(data-number);
+  position: absolute;
+  right: 0.4rem;
+  bottom: -2.2rem;
+  font-family: var(--font-mono);
+  font-size: 7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in oklch, var(--primary) 11%, transparent);
+  pointer-events: none;
+  translate: 0 25%;
+  opacity: 0;
+  transition:
+    translate 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 420ms ease;
+}
+
+.padma-foundation:hover::after,
+.padma-foundation:focus-within::after {
+  translate: 0 0;
+  opacity: 1;
+}
+
+/*
+ * A light traced around the border. The gradient fills the whole box and is then
+ * masked to the border area only: one mask covering the padding box, one
+ * covering the border box, composited with `exclude` to leave the ring between
+ * them. Guarded, because without `mask-composite` this would be a flat wash over
+ * the card's contents rather than a hairline.
+ */
+@supports (mask-composite: exclude) {
+  .padma-foundation::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(
+      from var(--padma-trace-angle),
+      transparent 0 54%,
+      color-mix(in oklch, var(--primary) 92%, transparent) 72%,
+      transparent 88%
+    );
+    mask:
+      linear-gradient(black, black) content-box,
+      linear-gradient(black, black);
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 280ms ease;
+  }
+
+  .padma-foundation:hover::before,
+  .padma-foundation:focus-within::before {
+    opacity: 1;
+    animation: padma-trace 2.6s linear infinite;
+  }
+}
+
+@keyframes padma-trace {
+  to {
+    --padma-trace-angle: 360deg;
+  }
+}
+
+.padma-foundation-number {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  transition: letter-spacing 340ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.padma-foundation:hover .padma-foundation-number,
+.padma-foundation:focus-within .padma-foundation-number {
+  letter-spacing: 0.3em;
+}
+
+/*
+ * Entrance for the closing grid. Entry only — these cards are the end of the
+ * page and have nowhere to leave to.
+ *
+ * `backwards`, emphatically not `both`. A filled animation outranks every
+ * transition on the same property, so holding the final frame forwards would
+ * pin `opacity` and `transform` for the rest of the page's life and silently
+ * kill both the hover lift and the sibling dim above — on precisely the browsers
+ * that support this timeline. Filling only backwards keeps the card hidden until
+ * its range opens and then hands it back to the cascade, where hover lives. The
+ * hand-off is invisible because the animation's last frame and the card's resting
+ * style are the same values.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .padma-foundation,
+    .padma-stat {
+      animation-name: padma-card-in;
+      animation-duration: auto;
+      animation-timing-function: linear;
+      animation-fill-mode: backwards;
+      animation-timeline: view();
+    }
+
+    /* Alternating stagger rather than sequential: in a two-column grid the pair
+       on one row should arrive together, not one after the other. */
+    .padma-foundation:nth-child(odd) {
+      animation-range: cover 6% cover 32%;
+    }
+
+    .padma-foundation:nth-child(even) {
+      animation-range: cover 10% cover 38%;
+    }
+
+    .padma-stat {
+      animation-range: cover 8% cover 36%;
+    }
+  }
+}
+
+@keyframes padma-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(2rem) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ===========================================================================
+   Statistics strip
+   =========================================================================== */
+
+.padma-stat {
+  position: relative;
+  padding-left: 1.15rem;
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.padma-stat::before {
+  content: "";
+  position: absolute;
+  top: 0.35rem;
+  bottom: 0.35rem;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 30%, transparent);
+  transition:
+    background-color 300ms ease,
+    scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: 50% 0;
+}
+
+.padma-stat:hover {
+  transform: translateY(-3px);
+}
+
+.padma-stat:hover::before {
+  background: var(--primary);
+  scale: 1.6 1;
+}
+
+.padma-stat-value {
+  display: block;
+  font-size: clamp(1.9rem, 3vw, 2.75rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--primary);
+}
+
+.padma-stat-label {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ===========================================================================
+   Terminal
+   ---------------------------------------------------------------------------
+   The commands type themselves in as the block crosses the viewport. The
+   timeline is the terminal's, not each line's: a single line is a short box and
+   would cross its own `view()` range almost instantly, which reads as a flicker
+   rather than as typing.
+   =========================================================================== */
+
+.padma-term {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+  view-timeline-name: --padma-term;
+  view-timeline-axis: block;
+}
+
+.padma-term-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--border) 65%, transparent);
+  padding: 0.7rem 0.9rem;
+}
+
+.padma-term-lamp {
+  display: block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--foreground) 20%, transparent);
+}
+
+.padma-term-lamp:first-child {
+  background: color-mix(in oklch, var(--primary) 75%, transparent);
+  animation: padma-lamp 3.8s ease-in-out infinite;
+}
+
+@keyframes padma-lamp {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.padma-term-title {
+  margin-left: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.padma-term-body {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.9rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.95;
+  overflow-x: auto;
+}
+
+.padma-term-line {
+  display: flex;
+  gap: 0.6rem;
+  border-radius: var(--radius-sm);
+  padding-inline: 0.65rem;
+  white-space: pre;
+  transition: background-color 180ms ease;
+}
+
+.padma-term-line:hover {
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+}
+
+.padma-term-prompt {
+  color: var(--primary);
+  user-select: none;
+}
+
+.padma-caret {
+  display: inline-block;
+  width: 0.55ch;
+  height: 1.05em;
+  margin-left: 0.45ch;
+  vertical-align: -0.16em;
+  background: var(--primary);
+  /* Two stops, no interpolation: a blinking block cursor is on or off, and a
+     fade between the two reads as a pulse instead. */
+  animation: padma-caret 1.1s steps(2, jump-none) infinite;
+}
+
+@keyframes padma-caret {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .padma-term-line {
+      animation-name: padma-type;
+      animation-duration: auto;
+      animation-fill-mode: both;
+      /* Stepped, so the reveal lands on character boundaries the way a cursor
+         would rather than sliding a smooth edge across the glyphs. */
+      animation-timing-function: steps(22, jump-end);
+      animation-timeline: --padma-term;
+      animation-range: cover calc(26% + var(--line-i, 0) * 8%) cover
+        calc(44% + var(--line-i, 0) * 8%);
+    }
+
+    .padma-term-line:nth-child(1) {
+      --line-i: 0;
+    }
+    .padma-term-line:nth-child(2) {
+      --line-i: 1;
+    }
+    .padma-term-line:nth-child(3) {
+      --line-i: 2;
+    }
+    .padma-term-line:nth-child(4) {
+      --line-i: 3;
+    }
+  }
+}
+
+@keyframes padma-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 -1% 0 0);
+  }
+}
+
+/* ===========================================================================
+   Section heading rule
+   ---------------------------------------------------------------------------
+   The border between the track and the closing section draws itself as the
+   reader arrives, so the two halves of the page are joined by a movement rather
+   than by a static line.
+   =========================================================================== */
+
+.padma-seam {
+  position: relative;
+  border-top: 1px solid var(--border);
+}
+
+.padma-seam::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 20%, transparent) 62%,
+    transparent
+  );
+  transform-origin: 0 50%;
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .padma-seam::before {
+      animation: padma-seam-draw linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 26%;
+    }
+  }
+}
+
+@keyframes padma-seam-draw {
+  from {
+    scale: 0 1;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
+/* ===========================================================================
+   Reduced motion
+   ---------------------------------------------------------------------------
+   Every ambient loop is switched off here, with the same selector it was
+   declared with so specificity is unchanged and only order decides. What remains
+   is a complete, legible, entirely static page: the scroll choreography above is
+   already behind `prefers-reduced-motion: no-preference`, and each rule below
+   restores a sensible resting state for a loop that will never run.
+   =========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .padma-aurora,
+  .padma-weave,
+  .padma-orbit,
+  .padma-halo,
+  .padma-mote,
+  .padma-live-dot::after,
+  .padma-cue-dot,
+  .padma-term-lamp:first-child,
+  .padma-caret,
+  .padma-cta:hover::after,
+  .padma-cta:focus-visible::after {
+    animation: none;
+  }
+
+  /* Ambient specks with nothing to move them are just dots on the screen. */
+  .padma-motes,
+  .padma-halos,
+  .padma-cue {
+    display: none;
+  }
+
+  .padma-char-hit > span {
+    animation: none;
+  }
+
+  /* With the cycle stopped, every word would otherwise be stacked in the slot
+     at once. The first one alone still reads as a sentence. */
+  .padma-cycler > span {
+    animation: none;
+  }
+
+  .padma-cycler > span:not(:first-child) {
+    display: none;
+  }
+}

@@ -25,7 +25,10 @@ export default async function SignInPage() {
   );
 
   return (
-    <main className="mx-auto flex min-h-[85vh] w-full max-w-md items-center px-6 py-16">
+    <main
+      id="main-content"
+      className="mx-auto flex min-h-[85vh] w-full max-w-md items-center px-6 py-16"
+    >
       <div className="w-full">
         <Link
           href="/"

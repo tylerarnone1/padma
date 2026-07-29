@@ -1,16 +1,42 @@
 # Padma v0.1
 
-Padma is a secure-by-default Next.js starter built to stay legible while humans
-and coding agents extend it. It provides the difficult cross-cutting
-foundations without deciding what product you are building.
+[![CI](https://github.com/tylerarnone1/padma/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerarnone1/padma/actions/workflows/ci.yml)
+[![Security](https://github.com/tylerarnone1/padma/actions/workflows/security.yml/badge.svg)](https://github.com/tylerarnone1/padma/actions/workflows/security.yml)
+[![MIT License](https://img.shields.io/badge/license-MIT-0f766e.svg)](./LICENSE)
 
-It ships with no organization, workspace, project, billing, or other borrowed
+Padma is a secure-by-default Next.js foundation for people building with coding
+agents. It gives the agent established lanes for identity, authorization,
+ownership, validation, auditing, and reliable side effects before your first
+product prompt.
+
+Most starters optimize the first screen. Padma is designed for the fiftieth AI
+iteration—when an agent would otherwise invent a second data-access pattern,
+trust authentication as authorization, or bolt a webhook call directly into a
+domain transaction.
+
+The core contract is deliberately simple:
+
+- authentication grants no capability by itself;
+- every feature declares who owns its records;
+- every trust boundary parses strict, bounded input;
+- sensitive actions require recent MFA and durable audit;
+- domain state and integration events commit together;
+- denial and cross-owner behavior are tested, not implied.
+
+Run `npm run generate:feature -- your-feature` and Padma creates a working
+default-deny slice. One test fails until ownership is declared in code. That
+failure is intentional: the framework cannot safely guess whether your product
+is personal, public, application-wide, or tenant-scoped.
+
+Padma ships with no organization, workspace, project, billing, or other borrowed
 SaaS domain. Your first feature defines your product.
 
 Padma reduces common implementation risk; it does not make an application
 automatically secure. The product built on top still needs explicit ownership
 rules, tested authorization decisions, production infrastructure controls, and
-an ongoing patching process.
+an ongoing patching process. Start with the
+[architecture](./docs/architecture.md), [threat model](./docs/security.md), and
+[ownership patterns](./docs/ownership-patterns.md).
 
 ## What is included
 
