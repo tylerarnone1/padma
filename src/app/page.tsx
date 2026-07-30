@@ -128,6 +128,7 @@ const STATS = [
 const SETUP_COMMANDS = [
   "npm install",
   "npm run setup",
+  "npm run doctor",
   "npm run dev:next",
   "npm run generate:feature -- your-feature",
 ] as const;

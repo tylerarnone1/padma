@@ -6,6 +6,11 @@ Create a vertical slice:
 npm run generate:feature -- feature-name
 ```
 
+Use lowercase kebab-case. Generation validates the repository root and writes
+the entire slice to a temporary sibling directory before publishing it
+atomically. It never merges into an existing feature, and a failed write leaves
+no partial scaffold behind.
+
 Before writing implementation, answer in the generated README:
 
 1. Who owns every record?

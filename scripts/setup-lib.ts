@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
   chmod,
@@ -6,10 +5,14 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import net from "node:net";
 import path from "node:path";
 import { parse } from "dotenv";
 import { prepareDevelopmentServices } from "./development";
+import {
+  localPortIsAvailable,
+  runLocalCommand,
+  type CommandResult,
+} from "./local-command";
 
 const APP_PORT_START = 3000;
 const APP_PORT_END = 3099;
@@ -29,12 +32,6 @@ const managedKeys = [
 ] as const;
 
 type ManagedKey = (typeof managedKeys)[number];
-
-export type CommandResult = {
-  code: number;
-  stdout: string;
-  stderr: string;
-};
 
 export type SetupLogger = {
   log(message: string): void;
@@ -65,68 +62,9 @@ export type SetupResult = {
   warnings: readonly string[];
 };
 
-function defaultRunCommand(input: {
-  command: string;
-  arguments: readonly string[];
-  cwd: string;
-  environment: NodeJS.ProcessEnv;
-}): Promise<CommandResult> {
-  return new Promise((resolve) => {
-    const child = spawn(input.command, input.arguments, {
-      cwd: input.cwd,
-      env: input.environment,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk: string) => {
-      stderr += chunk;
-    });
-    child.once("error", (error) => {
-      resolve({ code: 1, stdout, stderr: error.message });
-    });
-    child.once("exit", (code) => {
-      resolve({ code: code ?? 1, stdout, stderr });
-    });
-  });
-}
-
-function defaultPortIsAvailable(port: number): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.once("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "EADDRINUSE" || error.code === "EACCES") {
-        resolve(false);
-        return;
-      }
-      reject(error);
-    });
-    server.listen(
-      { host: "127.0.0.1", port, exclusive: true },
-      () => {
-        server.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve(true);
-        });
-      },
-    );
-  });
-}
-
 const defaultDependencies: SetupDependencies = {
-  runCommand: defaultRunCommand,
-  portIsAvailable: defaultPortIsAvailable,
+  runCommand: runLocalCommand,
+  portIsAvailable: localPortIsAvailable,
   prepareServices: prepareDevelopmentServices,
   randomSecret: () => randomBytes(SECRET_LENGTH_BYTES).toString("base64url"),
   logger: console,
@@ -551,12 +489,17 @@ export async function setupProject(input?: {
 
   dependencies.logger.log("");
   dependencies.logger.log("Padma local setup is ready.");
-  dependencies.logger.log(`Open ${resolvedAppUrl} after starting Next.js.`);
-  dependencies.logger.log("Next:");
-  dependencies.logger.log("  npm run dev:next");
-  dependencies.logger.log("  Choose the development account on /sign-in");
+  dependencies.logger.log("Golden path:");
+  dependencies.logger.log("  1. npm run doctor");
+  dependencies.logger.log("  2. npm run dev:next");
   dependencies.logger.log(
-    "  npm run generate:feature -- your-feature",
+    `  3. Open ${resolvedAppUrl}/sign-in and choose "Continue with mock account"`,
+  );
+  dependencies.logger.log(
+    "  4. In another terminal: npm run generate:feature -- your-feature",
+  );
+  dependencies.logger.log(
+    "  5. Declare its ownership model and run the generated tests",
   );
 
   return {

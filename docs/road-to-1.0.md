@@ -250,8 +250,10 @@ waiting until the code is complete.
   persistent development secrets, safe re-runs, and fail-closed database
   preparation.
 - Ask the product-topology questions in ordinary language.
-- Make mock sign-in and the first generated feature immediately discoverable.
-- Improve generator errors and first-run diagnostics.
+- Setup, sign-in, the dashboard, and generator output now expose one path from
+  the mock account to the first ownership-declared feature.
+- `npm run doctor` and the atomic feature generator now provide actionable
+  first-run and generation diagnostics without partial output.
 - Validate the full path on a clean machine and measure the time.
 - Record the real terminal-to-browser flow for the README and launch material.
 

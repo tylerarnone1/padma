@@ -65,6 +65,7 @@ Requirements:
 ```bash
 npm install
 npm run setup
+npm run doctor
 npm run dev:next
 ```
 
@@ -114,6 +115,7 @@ npm run db:stop
 | Command | Purpose |
 | --- | --- |
 | `npm run setup` | Create stable local configuration and prepare PostgreSQL safely |
+| `npm run doctor` | Diagnose local configuration, Docker, database drift, and app reachability without changing them |
 | `npm run dev` | Prepare PostgreSQL, verify the schema, seed, and start local Next.js |
 | `npm run dev:next` | Start only Next.js against an already prepared database |
 | `npm run generate:feature -- name` | Scaffold a product feature boundary |
@@ -137,6 +139,10 @@ default-deny vertical slice: an ownership declaration, a policy that keeps
 permission and ownership as separate checks, an owner-scoped repository, a
 service that refuses before it queries, and authorization tests that include the
 non-disclosure cases most implementations miss.
+
+Generation is atomic: invalid names, the wrong working directory, an existing
+feature, or a write failure produce an actionable error without leaving a
+partial feature directory.
 
 One generated test fails on purpose:
 
@@ -293,7 +299,7 @@ npm run db:reset   # discard the local volume and rebuild from the schema
 **Your first migration is your own.** As soon as you have data worth keeping —
 which is well before your first deployment — take ownership of the schema:
 
-```bash
+we ```bash
 npm run db:migrate -- --name init   # creates your baseline from the schema
 ```
 

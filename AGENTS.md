@@ -71,6 +71,9 @@ service that refuses before it queries, and authorization tests including
 non-disclosure cases. One generated test fails until `ownership.ts` declares an
 ownership model. Do not delete or skip that test. Answer it.
 
+Generation is atomic. Invalid input, a wrong working directory, an existing
+feature, or a failed write must not leave or merge a partial feature tree.
+
 ## Required operation order
 
 For every protected mutation:
@@ -155,6 +158,9 @@ security regression. A happy-path UI test is not an authorization test.
 
 ## Local development
 
+- `npm run doctor` is read-only. It diagnoses the supported Node version,
+  local configuration, Docker/Compose, PostgreSQL health and port ownership,
+  Prisma schema drift, and whether `APP_URL` is serving Padma.
 - `npm run setup` preflights Node.js and Docker, selects coordinated loopback
   ports on first run, persists gitignored development secrets, and prepares the
   database through the same fail-closed path as startup. Reruns preserve

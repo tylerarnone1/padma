@@ -40,7 +40,9 @@ make locally encrypted integration data unreadable.
   Empty databases may be created; existing drift is displayed and refused.
   Setup never resets a volume or reconciles an existing schema.
 - It prepares services and fixtures but does not own the long-running Next.js
-  process. The next command is `npm run dev:next`.
+  process. After the read-only diagnostic, `npm run dev:next` owns that process.
+- `npm run doctor` provides the read-only verification path for configuration,
+  service health, schema drift, and application reachability.
 
 `APP_URL` is the development server port contract. Direct Next.js port
 arguments may repeat that value but may not conflict with it.

@@ -16,9 +16,9 @@ import {
 } from "vitest";
 import {
   setupProject,
-  type CommandResult,
   type SetupDependencies,
 } from "./setup-lib";
+import type { CommandResult } from "./local-command";
 
 const template = `# Application
 APP_NAME="Padma"
@@ -166,7 +166,10 @@ describe("first-run setup", () => {
     );
 
     const output = logs.join("\n");
+    expect(output).toContain("npm run doctor");
     expect(output).toContain("npm run dev:next");
+    expect(output).toContain("/sign-in");
+    expect(output).toContain("Declare its ownership model");
     expect(output).not.toContain(values.BETTER_AUTH_SECRET);
     expect(output).not.toContain(values.INTEGRATION_ENCRYPTION_KEY);
   });

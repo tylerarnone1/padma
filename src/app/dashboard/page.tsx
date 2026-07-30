@@ -125,8 +125,9 @@ export default async function DashboardPage() {
               Create a vertical slice
             </h2>
             <p className="mt-2 leading-7 text-muted">
-              The generator creates a local place for UI, schemas, policies,
-              data access, services, and security tests.
+              The atomic generator creates UI, schema, policy, data, service,
+              and adversarial-test seams, then points to the ownership decision
+              that makes the slice pass.
             </p>
             <code className="mt-4 block overflow-x-auto rounded-lg bg-surface px-4 py-3 font-mono text-sm">
               npm run generate:feature -- your-feature

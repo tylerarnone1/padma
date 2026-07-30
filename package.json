@@ -12,6 +12,7 @@
   },
   "scripts": {
     "setup": "tsx scripts/setup.ts",
+    "doctor": "tsx scripts/doctor.ts",
     "dev": "tsx scripts/dev.ts",
     "dev:prepare": "tsx scripts/dev.ts --prepare-only",
     "dev:next": "tsx scripts/dev.ts --next-only",
